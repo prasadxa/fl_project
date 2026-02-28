@@ -63,8 +63,6 @@ class MedicalCNN(nn.Module):
         return self.classifier(x)
 
 
-# Alias for backward compatibility
-BrainTumorCNN = MedicalCNN
 
 
 def train_one_round(
@@ -130,4 +128,3 @@ def set_parameters(model: nn.Module, parameters: List[np.ndarray]) -> None:
          for k, v in zip(model.state_dict().keys(), parameters)}
     )
     model.load_state_dict(state_dict, strict=True)
-

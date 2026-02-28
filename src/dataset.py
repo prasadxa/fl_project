@@ -41,13 +41,14 @@ CLASS_NAMES: List[str] = [
 CLASS_TO_IDX: dict[str, int] = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 NUM_CLASSES: int = len(CLASS_NAMES)
 
-# ── Default transform ─────────────────────────────────────────────────────────
+# ── Default transform (inference / evaluation) ───────────────────────────────
 DEFAULT_TRANSFORM = transforms.Compose([
     transforms.Grayscale(num_output_channels=1),
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5], std=[0.5]),
 ])
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -102,7 +103,10 @@ def get_client_loader(
     num_workers: int = 0,
     shuffle: bool    = True,
 ) -> DataLoader:
-    dataset = MedicalImageDataset(PARTITIONS_DIR / f"client_{client_id}")
+    dataset = MedicalImageDataset(
+        PARTITIONS_DIR / f"client_{client_id}",
+        transform=DEFAULT_TRANSFORM,
+    )
     return DataLoader(dataset, batch_size=batch_size,
                       shuffle=shuffle, num_workers=num_workers)
 
@@ -114,4 +118,3 @@ def get_test_loader(
     dataset = MedicalImageDataset(PARTITIONS_DIR / "global_test")
     return DataLoader(dataset, batch_size=batch_size,
                       shuffle=False, num_workers=num_workers)
-

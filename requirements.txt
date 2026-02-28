@@ -1,0 +1,34 @@
+# Tecnomate FL Project — Pinned Requirements
+# Python 3.14.x
+# Install: pip install -r requirements.txt
+
+# Deep learning
+torch==2.10.0
+torchvision==0.25.0
+
+# Federated learning
+flwr==1.26.1
+
+# Computer vision
+opencv-python==4.13.0
+Pillow==12.1.0
+
+# Data & ML utilities
+numpy==2.4.2
+scikit-learn==1.8.0
+pandas==2.3.3
+
+# Visualisation
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# Clinical UI
+streamlit==1.53.1
+
+# OCR — text extraction from medical scan images (PP-OCRv3 via ONNX runtime)
+rapidocr-onnxruntime>=1.3.0
+
+# Web API backend (FastAPI + ASGI server)
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9

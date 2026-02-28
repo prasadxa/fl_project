@@ -877,7 +877,9 @@ body {
 }
 .ocr-conf-low {
     background: var(--danger-light);
-    color: var(--danger);
+     
+    
+}{ rewscolor: var(--danger);
 }
 
 .ocr-summary {

@@ -1,350 +1,2324 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tecnomate | Clinical AI</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
+<!doctype html>
+<html lang="en" data-theme="light">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Tecnomate | Clinical AI v2</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="style.css" />
+        <style>
+            /* ════════════════════════════════════════════════════════
+               DARK MODE TOKEN OVERRIDES
+            ════════════════════════════════════════════════════════ */
+            [data-theme="dark"] {
+                --bg: #0d1117;
+                --surface: #161b22;
+                --border: #30363d;
+                --border-mid: #3d4450;
+                --text-primary: #e6edf3;
+                --text-mid: #8b949e;
+                --text-muted: #6e7681;
+                --brand-navy: #010409;
+                --brand-navy-mid: #0d1117;
+                --brand-navy-light: #21262d;
+            }
+            [data-theme="dark"] .card {
+                background: var(--surface);
+                border-color: var(--border);
+                color: var(--text-primary);
+            }
+            [data-theme="dark"] .card-title,
+            [data-theme="dark"] .result-class,
+            [data-theme="dark"] .chart-title,
+            [data-theme="dark"] .field-label,
+            [data-theme="dark"] .drop-primary {
+                color: var(--text-primary);
+            }
+            [data-theme="dark"] .drop-zone {
+                background: #0d1117;
+                border-color: #30363d;
+            }
+            [data-theme="dark"] .drop-zone:hover,
+            [data-theme="dark"] .drop-zone.drag-hover {
+                border-color: #2563eb;
+                background: #0d2044;
+            }
+            [data-theme="dark"] .drop-secondary,
+            [data-theme="dark"] .drop-hint,
+            [data-theme="dark"] .result-conf,
+            [data-theme="dark"] .meta-item {
+                color: var(--text-muted);
+            }
+            [data-theme="dark"] .infer-options {
+                background: #161b22;
+                border-color: #30363d;
+                color: #8b949e;
+            }
+            [data-theme="dark"] .infer-opt-item {
+                color: #8b949e;
+            }
+            [data-theme="dark"] .infer-opt-item:hover {
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .uncertainty-panel {
+                background: #161b22;
+                border-color: #30363d;
+            }
+            [data-theme="dark"] .unc-row {
+                color: #8b949e;
+            }
+            [data-theme="dark"] .unc-row span:last-child {
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .field-value,
+            [data-theme="dark"] .select-diagnosis {
+                background: #0d1117;
+                border-color: #30363d;
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .clinician-field input,
+            [data-theme="dark"] .clinician-notes-wrap textarea {
+                background: #0d1117;
+                border-color: #30363d;
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .clinician-field input:focus,
+            [data-theme="dark"] .clinician-notes-wrap textarea:focus {
+                border-color: #2563eb;
+                background: #0d1f44;
+            }
+            [data-theme="dark"] .disclaimer-bar {
+                background: #161b22;
+                border-color: #30363d;
+                color: #6e7681;
+            }
+            [data-theme="dark"] .ocr-body {
+                color: #8b949e;
+            }
+            [data-theme="dark"] .ocr-line {
+                border-color: #21262d;
+            }
+            [data-theme="dark"] .ocr-line:hover {
+                background: #21262d;
+            }
+            [data-theme="dark"] .ocr-line-text {
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .preview-meta {
+                border-color: #30363d;
+            }
+            [data-theme="dark"] .modal-box {
+                background: #161b22;
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .modal-box h2 {
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .modal-field label {
+                color: #8b949e;
+            }
+            [data-theme="dark"] .modal-field input,
+            [data-theme="dark"] .modal-field select,
+            [data-theme="dark"] .modal-field textarea {
+                background: #0d1117;
+                border-color: #30363d;
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .modal-field input:focus,
+            [data-theme="dark"] .modal-field select:focus,
+            [data-theme="dark"] .modal-field textarea:focus {
+                background: #0d1f44;
+                border-color: #2563eb;
+            }
+            [data-theme="dark"] .modal-section-title {
+                border-color: #30363d;
+            }
+            [data-theme="dark"] .btn-outline {
+                background: transparent;
+                border-color: #30363d;
+                color: #8b949e;
+            }
+            [data-theme="dark"] .btn-outline:hover:not(:disabled) {
+                background: #21262d;
+                color: #e6edf3;
+            }
+            [data-theme="dark"] .mismatch-warning {
+                background: linear-gradient(135deg, #1c1400, #2d2000);
+                border-color: #f59e0b;
+            }
+            [data-theme="dark"] .mismatch-body p {
+                color: #fbbf24;
+            }
+            [data-theme="dark"] .mismatch-suggestion {
+                background: #1c1400;
+                border-color: #92400e;
+                color: #fbbf24;
+            }
+            [data-theme="dark"] .mismatch-mass-bar {
+                color: #fbbf24;
+            }
+            [data-theme="dark"] .mismatch-bar-wrap {
+                background: #451a03;
+            }
+            [data-theme="dark"] .icd-badge {
+                background: #0d2044;
+                border-color: #1d4ed8;
+                color: #93c5fd;
+            }
+            [data-theme="dark"] .history-item {
+                background: #0d1117;
+                border-color: #21262d;
+            }
+            [data-theme="dark"] .history-item:hover {
+                border-color: #2563eb;
+                background: #0d1f44;
+            }
 
-  <!-- ══════════════════════════════════════════════════
-       TOP HEADER
-  ══════════════════════════════════════════════════ -->
-  <header class="top-header">
-    <div class="header-brand">
-      <div class="brand-icon">
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-          <rect width="32" height="32" rx="8" fill="#2563eb"/>
-          <path d="M16 6v20M6 16h20" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-          <circle cx="16" cy="16" r="5" fill="none" stroke="white" stroke-width="2.5"/>
-        </svg>
-      </div>
-      <div class="brand-text">
-        <span class="brand-name">Tecnomate</span>
-        <span class="brand-sub">Clinical AI Platform</span>
-      </div>
-    </div>
+            /* ════════════════════════════════════════════════════════
+               DARK MODE TOGGLE BUTTON
+            ════════════════════════════════════════════════════════ */
+            .theme-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 34px;
+                height: 34px;
+                border-radius: 8px;
+                border: 1px solid var(--brand-navy-light);
+                background: var(--brand-navy-mid);
+                color: #94a3b8;
+                cursor: pointer;
+                transition:
+                    background var(--t-fast),
+                    color var(--t-fast),
+                    border-color var(--t-fast);
+                flex-shrink: 0;
+            }
+            .theme-toggle:hover {
+                background: #334155;
+                color: #fff;
+                border-color: #475569;
+            }
+            .theme-toggle .icon-moon {
+                display: block;
+            }
+            .theme-toggle .icon-sun {
+                display: none;
+            }
+            [data-theme="dark"] .theme-toggle .icon-moon {
+                display: none;
+            }
+            [data-theme="dark"] .theme-toggle .icon-sun {
+                display: block;
+            }
 
-    <div class="header-center">
-      <span class="header-tagline">Federated Medical Image Classifier &mdash; Privacy-Preserving Inference</span>
-    </div>
+            /* ════════════════════════════════════════════════════════
+               CONFIDENCE RING (SVG circular gauge)
+            ════════════════════════════════════════════════════════ */
+            .conf-ring-wrap {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                margin: 10px 0 4px;
+            }
+            .conf-ring-svg {
+                display: block;
+                transform: rotate(-90deg);
+                overflow: visible;
+            }
+            .conf-ring-bg {
+                fill: none;
+                stroke: var(--border, #e2e8f0);
+                stroke-width: 7;
+            }
+            .conf-ring-fill {
+                fill: none;
+                stroke-width: 7;
+                stroke-linecap: round;
+                stroke-dasharray: 251.2;
+                stroke-dashoffset: 251.2;
+                transition:
+                    stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1),
+                    stroke 0.4s ease;
+            }
+            .conf-ring-text {
+                font-size: 1.15rem;
+                font-weight: 800;
+                text-anchor: middle;
+                dominant-baseline: middle;
+                fill: var(--text-primary, #0f172a);
+                transform: rotate(90deg) translateY(-50%);
+            }
+            .conf-ring-label {
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: var(--text-muted, #94a3b8);
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                text-align: center;
+            }
 
-    <div class="header-status">
-      <div class="status-pill" id="modelStatusPill">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Connecting…</span>
-      </div>
-      <div class="status-pill ocr-pill" id="ocrStatusPill" title="OCR status">
-        <span class="status-dot" id="ocrDot"></span>
-        <span id="ocrStatusText">OCR</span>
-      </div>
-    </div>
-  </header>
+            /* ════════════════════════════════════════════════════════
+               TOAST NOTIFICATION SYSTEM
+            ════════════════════════════════════════════════════════ */
+            #toastContainer {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            }
+            .toast {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px 16px;
+                border-radius: 10px;
+                background: #1e293b;
+                color: #f1f5f9;
+                font-size: 0.84rem;
+                font-weight: 500;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+                pointer-events: all;
+                min-width: 240px;
+                max-width: 360px;
+                animation: toast-in 0.25s ease forwards;
+                border-left: 4px solid #2563eb;
+            }
+            .toast.toast-success {
+                border-left-color: #059669;
+            }
+            .toast.toast-error {
+                border-left-color: #dc2626;
+                background: #1a0505;
+            }
+            .toast.toast-warning {
+                border-left-color: #d97706;
+                background: #1c1200;
+            }
+            .toast.toast-out {
+                animation: toast-out 0.3s ease forwards;
+            }
+            @keyframes toast-in {
+                from {
+                    opacity: 0;
+                    transform: translateX(30px) scale(0.95);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0) scale(1);
+                }
+            }
+            @keyframes toast-out {
+                from {
+                    opacity: 1;
+                    transform: translateX(0) scale(1);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateX(30px) scale(0.9);
+                }
+            }
+            .toast-close {
+                margin-left: auto;
+                background: none;
+                border: none;
+                color: #64748b;
+                cursor: pointer;
+                padding: 2px;
+                font-size: 1rem;
+                line-height: 1;
+                flex-shrink: 0;
+            }
+            .toast-close:hover {
+                color: #f1f5f9;
+            }
 
-  <!-- ══════════════════════════════════════════════════
-       MAIN LAYOUT
-  ══════════════════════════════════════════════════ -->
-  <div class="app-layout">
+            /* ════════════════════════════════════════════════════════
+               HISTORY PANEL (inside sidebar)
+            ════════════════════════════════════════════════════════ */
+            .history-list {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                margin-top: 4px;
+                max-height: 220px;
+                overflow-y: auto;
+            }
+            .history-list::-webkit-scrollbar {
+                width: 4px;
+            }
+            .history-list::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .history-list::-webkit-scrollbar-thumb {
+                background: #334155;
+                border-radius: 99px;
+            }
+            .history-item {
+                background: var(--sidebar-surface);
+                border: 1px solid var(--sidebar-border);
+                border-radius: 7px;
+                padding: 7px 10px;
+                cursor: pointer;
+                transition:
+                    border-color var(--t-fast),
+                    background var(--t-fast);
+            }
+            .history-item:hover {
+                border-color: #2563eb;
+                background: #1a2744;
+            }
+            .history-item-top {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+            }
+            .history-item-label {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: var(--sidebar-text);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 140px;
+            }
+            .history-item-conf {
+                font-size: 0.7rem;
+                font-weight: 700;
+                color: #38bdf8;
+                flex-shrink: 0;
+            }
+            .history-item-meta {
+                font-size: 0.68rem;
+                color: var(--sidebar-muted);
+                margin-top: 2px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .history-empty {
+                font-size: 0.74rem;
+                color: var(--sidebar-muted);
+                text-align: center;
+                padding: 10px 0;
+            }
+            .history-clear-btn {
+                font-size: 0.7rem;
+                color: #64748b;
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 0;
+                text-decoration: underline;
+                text-underline-offset: 2px;
+            }
+            .history-clear-btn:hover {
+                color: #94a3b8;
+            }
+            .sidebar-label-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
 
-    <!-- ── SIDEBAR ────────────────────────────────── -->
-    <aside class="sidebar">
-      <div class="sidebar-section">
-        <p class="sidebar-label">Scan Type</p>
-        <div class="scan-selector">
-          <button class="scan-btn active" id="btnBrainMRI" data-mode="Brain MRI" onclick="setScanType('Brain MRI')">
-            <span class="scan-icon">🧠</span>
-            <div class="scan-btn-text">
-              <span class="scan-btn-title">Brain MRI</span>
-              <span class="scan-btn-sub">Glioma · Meningioma · Pituitary · No Tumor</span>
+            /* ════════════════════════════════════════════════════════
+               KEYBOARD SHORTCUT HINTS
+            ════════════════════════════════════════════════════════ */
+            .kbd {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 1px 5px;
+                border-radius: 4px;
+                background: #1e293b;
+                border: 1px solid #334155;
+                color: #94a3b8;
+                font-size: 0.65rem;
+                font-family: "Courier New", monospace;
+                font-weight: 600;
+                letter-spacing: 0;
+                vertical-align: middle;
+            }
+            [data-theme="dark"] .kbd {
+                background: #0d1117;
+                border-color: #30363d;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               COPY ICD BUTTON
+            ════════════════════════════════════════════════════════ */
+            .icd-copy-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 20px;
+                height: 20px;
+                border-radius: 4px;
+                border: none;
+                background: transparent;
+                color: #1d4ed8;
+                cursor: pointer;
+                padding: 0;
+                margin-left: 2px;
+                transition:
+                    background var(--t-fast),
+                    color var(--t-fast);
+                vertical-align: middle;
+            }
+            .icd-copy-btn:hover {
+                background: #bfdbfe;
+                color: #1e3a8a;
+            }
+            [data-theme="dark"] .icd-copy-btn {
+                color: #93c5fd;
+            }
+            [data-theme="dark"] .icd-copy-btn:hover {
+                background: #1d3059;
+                color: #bfdbfe;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               UPLOAD PROGRESS BAR
+            ════════════════════════════════════════════════════════ */
+            .upload-progress-wrap {
+                height: 3px;
+                background: var(--border, #e2e8f0);
+                border-radius: 99px;
+                overflow: hidden;
+                margin-top: 10px;
+                transition: opacity 0.3s;
+                opacity: 0;
+            }
+            .upload-progress-wrap.visible {
+                opacity: 1;
+            }
+            .upload-progress-bar {
+                height: 100%;
+                width: 0%;
+                background: linear-gradient(90deg, #2563eb, #38bdf8);
+                border-radius: 99px;
+                transition: width 0.25s ease;
+            }
+            .upload-progress-bar.indeterminate {
+                width: 40%;
+                animation: slide-progress 1.2s ease-in-out infinite;
+            }
+            @keyframes slide-progress {
+                0% {
+                    transform: translateX(-200%);
+                }
+                100% {
+                    transform: translateX(350%);
+                }
+            }
+
+            /* ════════════════════════════════════════════════════════
+               PATIENT INFO MODAL
+            ════════════════════════════════════════════════════════ */
+            .modal-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.65);
+                backdrop-filter: blur(4px);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+            .modal-overlay.open {
+                display: flex;
+            }
+            .modal-box {
+                background: #fff;
+                border-radius: 14px;
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+                width: min(680px, 96vw);
+                max-height: 90vh;
+                overflow-y: auto;
+                padding: 28px 32px 24px;
+                position: relative;
+                transition: background var(--t-base);
+            }
+            .modal-box h2 {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin: 0 0 18px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .modal-close {
+                position: absolute;
+                top: 14px;
+                right: 16px;
+                background: none;
+                border: none;
+                cursor: pointer;
+                color: #64748b;
+                font-size: 1.4rem;
+                line-height: 1;
+                padding: 4px 8px;
+                border-radius: 6px;
+                transition: background 0.15s;
+            }
+            .modal-close:hover {
+                background: #f1f5f9;
+                color: #1e293b;
+            }
+            [data-theme="dark"] .modal-close:hover {
+                background: #21262d;
+            }
+            .modal-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px 20px;
+            }
+            .modal-grid .full {
+                grid-column: 1 / -1;
+            }
+            .modal-field label {
+                display: block;
+                font-size: 0.78rem;
+                font-weight: 600;
+                color: #475569;
+                margin-bottom: 5px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .modal-field input,
+            .modal-field select,
+            .modal-field textarea {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 8px 11px;
+                border: 1.5px solid #cbd5e1;
+                border-radius: 7px;
+                font-size: 0.875rem;
+                color: #1e293b;
+                background: #f8fafc;
+                transition:
+                    border 0.15s,
+                    box-shadow 0.15s;
+                font-family: inherit;
+            }
+            .modal-field input:focus,
+            .modal-field select:focus,
+            .modal-field textarea:focus {
+                outline: none;
+                border-color: #2563eb;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+                background: #fff;
+            }
+            .modal-field textarea {
+                resize: vertical;
+                min-height: 72px;
+            }
+            .modal-actions {
+                margin-top: 22px;
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+            .modal-section-title {
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #2563eb;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                margin: 18px 0 10px;
+                padding-bottom: 4px;
+                border-bottom: 1.5px solid #e2e8f0;
+                grid-column: 1 / -1;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               UNCERTAINTY PANEL
+            ════════════════════════════════════════════════════════ */
+            .uncertainty-panel {
+                margin-top: 10px;
+                padding: 10px 14px;
+                border-radius: 8px;
+                border: 1.5px solid var(--border, #e2e8f0);
+                background: var(--bg, #f8fafc);
+                font-size: 0.82rem;
+            }
+            .uncertainty-panel .unc-title {
+                font-weight: 700;
+                font-size: 0.78rem;
+                color: #2563eb;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 6px;
+            }
+            .unc-row {
+                display: flex;
+                justify-content: space-between;
+                padding: 2px 0;
+                color: var(--text-mid, #475569);
+            }
+            .unc-row span:last-child {
+                font-weight: 600;
+                color: var(--text-primary, #1e293b);
+            }
+            .unc-label-low {
+                color: #16a34a;
+                font-weight: 700;
+            }
+            .unc-label-mod {
+                color: #d97706;
+                font-weight: 700;
+            }
+            .unc-label-high {
+                color: #dc2626;
+                font-weight: 700;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               INFERENCE OPTIONS ROW
+            ════════════════════════════════════════════════════════ */
+            .infer-options {
+                display: flex;
+                gap: 18px;
+                flex-wrap: wrap;
+                margin-top: 8px;
+                padding: 10px 14px;
+                background: #f1f5f9;
+                border-radius: 8px;
+                border: 1.5px solid var(--border, #e2e8f0);
+                font-size: 0.84rem;
+            }
+            .infer-opt-item {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                cursor: pointer;
+                color: #475569;
+                font-weight: 500;
+                user-select: none;
+            }
+            .infer-opt-item input[type="checkbox"] {
+                accent-color: #2563eb;
+                width: 15px;
+                height: 15px;
+                cursor: pointer;
+            }
+            .infer-opt-item:hover {
+                color: #1e293b;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               PDF + TXT BUTTONS
+            ════════════════════════════════════════════════════════ */
+            .btn-pdf {
+                background: linear-gradient(135deg, #dc2626, #b91c1c);
+                color: #fff;
+                border: none;
+            }
+            .btn-pdf:hover:not(:disabled) {
+                background: linear-gradient(135deg, #b91c1c, #991b1b);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+            }
+            .btn-pdf:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            .btn-txt {
+                background: linear-gradient(135deg, #475569, #334155);
+                color: #fff;
+                border: none;
+            }
+            .btn-txt:hover:not(:disabled) {
+                background: linear-gradient(135deg, #334155, #1e293b);
+                transform: translateY(-1px);
+            }
+            .btn-txt:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               ICD-10 BADGE
+            ════════════════════════════════════════════════════════ */
+            .icd-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 9px;
+                border-radius: 20px;
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                color: #1d4ed8;
+                font-size: 0.75rem;
+                font-weight: 700;
+                margin-top: 6px;
+                font-family: "Courier New", monospace;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               CLINICIAN FIELDS
+            ════════════════════════════════════════════════════════ */
+            .clinician-fields {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-top: 10px;
+            }
+            .clinician-field label {
+                display: block;
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: #64748b;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin-bottom: 4px;
+            }
+            .clinician-field input {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 7px 10px;
+                border: 1.5px solid var(--border, #e2e8f0);
+                border-radius: 7px;
+                font-size: 0.84rem;
+                color: var(--text-primary, #1e293b);
+                background: var(--bg, #f8fafc);
+                font-family: inherit;
+                transition: border 0.15s;
+            }
+            .clinician-field input:focus {
+                outline: none;
+                border-color: #2563eb;
+                background: #fff;
+            }
+            .clinician-notes-wrap {
+                margin-top: 10px;
+            }
+            .clinician-notes-wrap label {
+                display: block;
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: #64748b;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin-bottom: 4px;
+            }
+            .clinician-notes-wrap textarea {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 8px 10px;
+                border: 1.5px solid var(--border, #e2e8f0);
+                border-radius: 7px;
+                font-size: 0.84rem;
+                color: var(--text-primary, #1e293b);
+                background: var(--bg, #f8fafc);
+                font-family: inherit;
+                resize: vertical;
+                min-height: 58px;
+                transition: border 0.15s;
+            }
+            .clinician-notes-wrap textarea:focus {
+                outline: none;
+                border-color: #2563eb;
+                background: #fff;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               SCAN-TYPE MISMATCH WARNING
+            ════════════════════════════════════════════════════════ */
+            .mismatch-warning {
+                display: none;
+                margin-bottom: 10px;
+                border-radius: 10px;
+                border: 2px solid #f59e0b;
+                background: linear-gradient(135deg, #fffbeb, #fef3c7);
+                overflow: hidden;
+            }
+            .mismatch-warning.visible {
+                display: block;
+            }
+            .mismatch-header {
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                padding: 10px 14px 8px;
+                background: #f59e0b;
+                color: #fff;
+            }
+            .mismatch-header svg {
+                flex-shrink: 0;
+            }
+            .mismatch-header strong {
+                font-size: 0.88rem;
+                font-weight: 700;
+                letter-spacing: 0.01em;
+            }
+            .mismatch-body {
+                padding: 10px 14px 12px;
+            }
+            .mismatch-body p {
+                margin: 0 0 8px;
+                font-size: 0.82rem;
+                color: #78350f;
+                line-height: 1.45;
+            }
+            .mismatch-body p:last-child {
+                margin-bottom: 0;
+            }
+            .mismatch-suggestion {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 11px;
+                border-radius: 7px;
+                background: #fff;
+                border: 1.5px solid #fcd34d;
+                font-size: 0.82rem;
+                color: #92400e;
+                margin-bottom: 8px;
+            }
+            .mismatch-suggestion strong {
+                color: #1e293b;
+            }
+            .mismatch-switch-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 13px;
+                border-radius: 7px;
+                border: 1.5px solid #f59e0b;
+                background: #fff;
+                color: #b45309;
+                font-size: 0.8rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition:
+                    background 0.15s,
+                    color 0.15s;
+            }
+            .mismatch-switch-btn:hover {
+                background: #f59e0b;
+                color: #fff;
+            }
+            .mismatch-mass-bar {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+                margin-top: 8px;
+                font-size: 0.75rem;
+                color: #92400e;
+            }
+            .mismatch-bar-wrap {
+                flex: 1;
+                height: 7px;
+                border-radius: 99px;
+                background: #fde68a;
+                overflow: hidden;
+            }
+            .mismatch-bar-fill {
+                height: 100%;
+                border-radius: 99px;
+                background: #f59e0b;
+                transition: width 0.5s ease;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               PDF GENERATING OVERLAY
+            ════════════════════════════════════════════════════════ */
+            .pdf-generating-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.55);
+                z-index: 2000;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .pdf-generating-overlay.open {
+                display: flex;
+            }
+            .pdf-spin-box {
+                background: var(--surface, #fff);
+                border-radius: 14px;
+                padding: 28px 36px;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            }
+            .pdf-spin-box p {
+                margin: 12px 0 0;
+                font-weight: 600;
+                color: var(--text-primary, #1e293b);
+            }
+            .pdf-spin-box .sub {
+                font-size: 0.8rem;
+                color: var(--text-muted, #64748b);
+                font-weight: 400;
+                margin-top: 4px;
+            }
+            @keyframes spin360 {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .pdf-spinner-svg {
+                animation: spin360 0.9s linear infinite;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               GRAD-CAM HINT
+            ════════════════════════════════════════════════════════ */
+            .gradcam-hint {
+                font-size: 0.75rem;
+                color: #059669;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-top: 4px;
+            }
+            .gradcam-hint.hidden {
+                display: none;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               RESULTS SECTION — smooth reveal animation
+            ════════════════════════════════════════════════════════ */
+            @keyframes card-reveal {
+                from {
+                    opacity: 0;
+                    transform: translateY(14px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            .results-area {
+                animation: card-reveal 0.35s ease;
+            }
+            .card.ocr-card,
+            .card.doctor-card {
+                animation: card-reveal 0.35s ease;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               PREDICTION RESULT ENHANCEMENT — confidence block
+            ════════════════════════════════════════════════════════ */
+            .result-meta-row {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                margin-top: 6px;
+                flex-wrap: wrap;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               KEYBOARD SHORTCUT TOOLTIP on predict button
+            ════════════════════════════════════════════════════════ */
+            .btn-predict-wrap {
+                position: relative;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               STATUS INDICATOR ANIMATION — pulse on new session
+            ════════════════════════════════════════════════════════ */
+            @keyframes ping-once {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+                }
+            }
+            .ping-once {
+                animation: ping-once 0.6s ease;
+            }
+
+            /* ════════════════════════════════════════════════════════
+               RESPONSIVE TWEAKS
+            ════════════════════════════════════════════════════════ */
+            @media (max-width: 540px) {
+                .clinician-fields {
+                    grid-template-columns: 1fr;
+                }
+                .modal-grid {
+                    grid-template-columns: 1fr;
+                }
+                .modal-grid .full {
+                    grid-column: 1;
+                }
+                .modal-section-title {
+                    grid-column: 1;
+                }
+                #toastContainer {
+                    right: 12px;
+                    bottom: 12px;
+                    left: 12px;
+                }
+                .toast {
+                    min-width: unset;
+                    max-width: 100%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ══════════════════════════════════════════════════
+             TOAST CONTAINER
+        ══════════════════════════════════════════════════ -->
+        <div id="toastContainer" aria-live="polite" aria-atomic="false"></div>
+
+        <!-- ══════════════════════════════════════════════════
+             PATIENT INFO MODAL
+        ══════════════════════════════════════════════════ -->
+        <div
+            class="modal-overlay"
+            id="patientModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="patientModalTitle"
+        >
+            <div class="modal-box">
+                <button
+                    class="modal-close"
+                    onclick="closePatientModal()"
+                    title="Close (Esc)"
+                >
+                    &times;
+                </button>
+                <h2 id="patientModalTitle">
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                    >
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    Patient &amp; Visit Information
+                </h2>
+
+                <div class="modal-grid">
+                    <span class="modal-section-title">Patient Details</span>
+
+                    <div class="modal-field">
+                        <label for="ptName">Patient Name</label>
+                        <input
+                            type="text"
+                            id="ptName"
+                            placeholder="Anonymous / De-identified"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="modal-field">
+                        <label for="ptId">Patient ID</label>
+                        <input
+                            type="text"
+                            id="ptId"
+                            placeholder="e.g. PT-00142"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="modal-field">
+                        <label for="ptDob">Date of Birth</label>
+                        <input type="date" id="ptDob" />
+                    </div>
+                    <div class="modal-field">
+                        <label for="ptGender">Gender</label>
+                        <select id="ptGender">
+                            <option value="N/A">Prefer not to say</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Non-binary">Non-binary</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <span class="modal-section-title">Visit Details</span>
+
+                    <div class="modal-field">
+                        <label for="ptVisitDate">Visit Date</label>
+                        <input type="date" id="ptVisitDate" />
+                    </div>
+                    <div class="modal-field">
+                        <label for="ptRefDoc">Referring Clinician</label>
+                        <input
+                            type="text"
+                            id="ptRefDoc"
+                            placeholder="Dr. &hellip;"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="modal-field full">
+                        <label for="ptInstitution"
+                            >Institution / Hospital</label
+                        >
+                        <input
+                            type="text"
+                            id="ptInstitution"
+                            placeholder="Tecnomate Health Network"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="modal-field full">
+                        <label for="ptNotes">Clinical Notes</label>
+                        <textarea
+                            id="ptNotes"
+                            placeholder="Relevant clinical history, symptoms, prior imaging findings&hellip;"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button
+                        class="btn btn-outline"
+                        onclick="clearPatientForm()"
+                    >
+                        Clear
+                    </button>
+                    <button
+                        class="btn btn-primary"
+                        onclick="closePatientModal()"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                        >
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Save &amp; Close
+                    </button>
+                </div>
             </div>
-          </button>
-          <button class="scan-btn" id="btnChestXRay" data-mode="Chest X-Ray" onclick="setScanType('Chest X-Ray')">
-            <span class="scan-icon">🫁</span>
-            <div class="scan-btn-text">
-              <span class="scan-btn-title">Chest X-Ray</span>
-              <span class="scan-btn-sub">Pneumonia · Normal</span>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             PDF GENERATING OVERLAY
+        ══════════════════════════════════════════════════ -->
+        <div
+            class="pdf-generating-overlay"
+            id="pdfOverlay"
+            role="status"
+            aria-label="Generating PDF report"
+        >
+            <div class="pdf-spin-box">
+                <svg
+                    class="pdf-spinner-svg"
+                    width="42"
+                    height="42"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#2563eb"
+                    stroke-width="2.5"
+                >
+                    <path
+                        d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                    />
+                </svg>
+                <p>Generating PDF Report&hellip;</p>
+                <p class="sub">
+                    Rendering scan, Grad-CAM &amp; chart. Please wait.
+                </p>
             </div>
-          </button>
-        </div>
-      </div>
-
-      <div class="sidebar-section">
-        <p class="sidebar-label">Model Info</p>
-        <div class="info-list" id="modelInfoList">
-          <div class="info-row">
-            <span class="info-key">Classes</span>
-            <span class="info-val" id="infoClasses">6</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Input</span>
-            <span class="info-val">128 × 128</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Architecture</span>
-            <span class="info-val">MedicalCNN</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Learning</span>
-            <span class="info-val">Federated</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Privacy</span>
-            <span class="info-val">EXIF Stripped</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-section">
-        <p class="sidebar-label">Session Queue</p>
-        <div class="queue-summary" id="queueSummary">
-          <div class="queue-stat">
-            <span class="queue-num" id="queueCount">0</span>
-            <span class="queue-lbl">Confirmed</span>
-          </div>
-          <div class="queue-stat">
-            <span class="queue-num" id="overrideCount">0</span>
-            <span class="queue-lbl">Overridden</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-section sidebar-footer">
-        <div class="privacy-badge">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-          </svg>
-          Privacy-Preserving
-        </div>
-        <p class="sidebar-version">v1.0.0 &mdash; PyTorch &amp; Flower FL</p>
-      </div>
-    </aside>
-
-    <!-- ── MAIN PANEL ──────────────────────────────── -->
-    <main class="main-panel">
-
-      <!-- UPLOAD CARD -->
-      <section class="card upload-card" id="uploadCard">
-        <div class="card-header">
-          <h2 class="card-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Upload Medical Scan
-          </h2>
-          <span class="card-badge" id="scanTypeBadge">🧠 Brain MRI</span>
         </div>
 
-        <div class="drop-zone" id="dropZone"
-             ondragover="handleDragOver(event)"
-             ondragleave="handleDragLeave(event)"
-             ondrop="handleDrop(event)"
-             onclick="document.getElementById('fileInput').click()">
-          <div class="drop-zone-inner" id="dropZoneInner">
-            <div class="drop-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="3"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
+        <!-- ══════════════════════════════════════════════════
+             TOP HEADER
+        ══════════════════════════════════════════════════ -->
+        <header class="top-header">
+            <div class="header-brand">
+                <div class="brand-icon">
+                    <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                        <rect width="32" height="32" rx="8" fill="#2563eb" />
+                        <path
+                            d="M16 6v20M6 16h20"
+                            stroke="white"
+                            stroke-width="3.5"
+                            stroke-linecap="round"
+                        />
+                        <circle
+                            cx="16"
+                            cy="16"
+                            r="5"
+                            fill="none"
+                            stroke="white"
+                            stroke-width="2.5"
+                        />
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">Tecnomate</span>
+                    <span class="brand-sub">Clinical AI Platform v2</span>
+                </div>
             </div>
-            <p class="drop-primary">Drag &amp; drop your scan here</p>
-            <p class="drop-secondary">or <span class="drop-link">browse files</span> &mdash; JPEG &amp; PNG supported</p>
-            <p class="drop-hint">MRI scans, X-rays, CT images &mdash; any resolution accepted</p>
-          </div>
-          <input type="file" id="fileInput" accept="image/jpeg,image/png,image/jpg" hidden onchange="handleFileSelect(event)" />
-        </div>
 
-        <!-- Error alert -->
-        <div class="alert alert-error" id="uploadError" hidden>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-          </svg>
-          <span id="uploadErrorMsg"></span>
-        </div>
-      </section>
-
-      <!-- RESULTS AREA (shown after prediction) -->
-      <section class="results-area" id="resultsArea" hidden>
-
-        <!-- LEFT: Image Preview -->
-        <div class="card preview-card">
-          <div class="card-header">
-            <h3 class="card-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <rect x="3" y="3" width="18" height="18" rx="3"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-              Image Preview
-            </h3>
-            <button class="btn-icon" id="clearBtn" onclick="clearAll()" title="Clear and upload another">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-          <div class="preview-container">
-            <img id="previewImage" class="preview-img" src="" alt="Uploaded scan" />
-          </div>
-          <div class="preview-meta">
-            <span class="meta-item" id="metaFilename">—</span>
-            <span class="meta-sep">·</span>
-            <span class="meta-item" id="metaSize">—</span>
-          </div>
-        </div>
-
-        <!-- RIGHT: Prediction Results -->
-        <div class="card prediction-card" id="predictionCard">
-          <div class="card-header">
-            <h3 class="card-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-              AI Diagnosis
-            </h3>
-            <!-- Loading spinner -->
-            <div class="spinner" id="predictionSpinner"></div>
-          </div>
-
-          <!-- Prediction result badge -->
-          <div class="prediction-result" id="predictionResult" hidden>
-            <div class="result-label" id="resultLabel">
-              <span class="result-emoji" id="resultEmoji">🧠</span>
-              <div class="result-text">
-                <p class="result-class" id="resultClass">—</p>
-                <p class="result-conf" id="resultConf">—</p>
-              </div>
-              <div class="result-risk-badge" id="resultRiskBadge">HIGH</div>
+            <div class="header-center">
+                <span class="header-tagline"
+                    >Federated Medical Image Classifier &mdash;
+                    Privacy-Preserving Inference</span
+                >
             </div>
-          </div>
 
-          <!-- Probability chart -->
-          <div class="chart-container" id="chartContainer" hidden>
-            <p class="chart-title">Class Probabilities</p>
-            <canvas id="probChart"></canvas>
-          </div>
-
-          <!-- Predict button -->
-          <button class="btn btn-primary btn-predict" id="predictBtn" onclick="runPredict()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            Run AI Analysis
-          </button>
-        </div>
-      </section>
-
-      <!-- OCR PANEL -->
-      <section class="card ocr-card" id="ocrCard" hidden>
-        <div class="card-header">
-          <h3 class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
-            </svg>
-            Extracted Text (OCR)
-          </h3>
-          <span class="ocr-elapsed" id="ocrElapsed"></span>
-        </div>
-        <div class="ocr-body" id="ocrBody">
-          <!-- Populated by JS -->
-        </div>
-      </section>
-
-      <!-- DOCTOR DECISION PANEL -->
-      <section class="card doctor-card" id="doctorCard" hidden>
-        <div class="card-header">
-          <h3 class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            Clinician Review &amp; Confirmation
-          </h3>
-          <div class="override-badge" id="overrideBadge" hidden>AI Override</div>
-        </div>
-
-        <div class="doctor-body">
-          <div class="doctor-ai-row">
-            <div class="doctor-field">
-              <label class="field-label">AI Prediction</label>
-              <div class="field-value ai-value" id="doctorAIPred">—</div>
+            <div class="header-status">
+                <div class="status-pill" id="modelStatusPill">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Connecting&hellip;</span>
+                </div>
+                <div
+                    class="status-pill ocr-pill"
+                    id="ocrStatusPill"
+                    title="OCR status"
+                >
+                    <span class="status-dot" id="ocrDot"></span>
+                    <span id="ocrStatusText">OCR</span>
+                </div>
+                <!-- Dark / Light mode toggle -->
+                <button
+                    class="theme-toggle"
+                    id="themeToggleBtn"
+                    onclick="toggleTheme()"
+                    title="Toggle dark / light mode"
+                    aria-label="Toggle theme"
+                >
+                    <!-- Moon (shown in light mode) -->
+                    <svg
+                        class="icon-moon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                        />
+                    </svg>
+                    <!-- Sun (shown in dark mode) -->
+                    <svg
+                        class="icon-sun"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="5" />
+                        <line x1="12" y1="1" x2="12" y2="3" />
+                        <line x1="12" y1="21" x2="12" y2="23" />
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                        <line x1="1" y1="12" x2="3" y2="12" />
+                        <line x1="21" y1="12" x2="23" y2="12" />
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    </svg>
+                </button>
             </div>
-            <div class="doctor-arrow">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"/>
-                <polyline points="12 5 19 12 12 19"/>
-              </svg>
-            </div>
-            <div class="doctor-field">
-              <label class="field-label">Your Diagnosis</label>
-              <select class="select-diagnosis" id="doctorSelect" onchange="handleDoctorSelectChange()">
-                <!-- Options injected by JS based on scan type -->
-              </select>
-            </div>
-          </div>
+        </header>
 
-          <div class="doctor-actions">
-            <button class="btn btn-success" id="confirmBtn" onclick="submitFeedback()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Confirm &amp; Save
-            </button>
-            <button class="btn btn-outline" id="downloadBtn" onclick="downloadReport()" disabled>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Download Report
-            </button>
-          </div>
+        <!-- ══════════════════════════════════════════════════
+             MAIN APP LAYOUT
+        ══════════════════════════════════════════════════ -->
+        <div class="app-layout">
+            <!-- ── SIDEBAR ──────────────────────────────── -->
+            <aside class="sidebar">
+                <!-- Scan Type -->
+                <div class="sidebar-section">
+                    <p class="sidebar-label">Scan Type</p>
+                    <div class="scan-selector">
+                        <button
+                            class="scan-btn active"
+                            id="btnBrainMRI"
+                            data-mode="Brain MRI"
+                            onclick="setScanType('Brain MRI')"
+                        >
+                            <span class="scan-icon">🧠</span>
+                            <div class="scan-btn-text">
+                                <span class="scan-btn-title">Brain MRI</span>
+                                <span class="scan-btn-sub"
+                                    >Glioma &middot; Meningioma &middot;
+                                    Pituitary &middot; No Tumor</span
+                                >
+                            </div>
+                        </button>
+                        <button
+                            class="scan-btn"
+                            id="btnChestXRay"
+                            data-mode="Chest X-Ray"
+                            onclick="setScanType('Chest X-Ray')"
+                        >
+                            <span class="scan-icon">🫁</span>
+                            <div class="scan-btn-text">
+                                <span class="scan-btn-title">Chest X-Ray</span>
+                                <span class="scan-btn-sub"
+                                    >Pneumonia &middot; Normal</span
+                                >
+                            </div>
+                        </button>
+                    </div>
+                </div>
 
-          <!-- Feedback result alert -->
-          <div class="alert alert-success" id="feedbackSuccess" hidden>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            <span id="feedbackSuccessMsg"></span>
-          </div>
-          <div class="alert alert-error" id="feedbackError" hidden>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-            </svg>
-            <span id="feedbackErrorMsg"></span>
-          </div>
+                <!-- Model Info -->
+                <div class="sidebar-section">
+                    <p class="sidebar-label">Model Info</p>
+                    <div class="info-list" id="modelInfoList">
+                        <div class="info-row">
+                            <span class="info-key">Classes</span>
+                            <span class="info-val" id="infoClasses">6</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-key">Input</span>
+                            <span class="info-val">128 &times; 128</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-key">Architecture</span>
+                            <span class="info-val">MedicalCNN</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-key">Learning</span>
+                            <span class="info-val">Federated</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-key">Privacy</span>
+                            <span class="info-val">EXIF Stripped</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-key">Report</span>
+                            <span class="info-val">PDF + TXT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Session Queue -->
+                <div class="sidebar-section">
+                    <p class="sidebar-label">Session Queue</p>
+                    <div class="queue-summary" id="queueSummary">
+                        <div class="queue-stat">
+                            <span class="queue-num" id="queueCount">0</span>
+                            <span class="queue-lbl">Confirmed</span>
+                        </div>
+                        <div class="queue-stat">
+                            <span class="queue-num" id="overrideCount">0</span>
+                            <span class="queue-lbl">Overridden</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Patient Info shortcut -->
+                <div class="sidebar-section">
+                    <p class="sidebar-label">Patient Info</p>
+                    <button
+                        class="btn btn-outline"
+                        style="width: 100%; font-size: 0.82rem"
+                        onclick="openPatientModal()"
+                    >
+                        <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                        >
+                            <path
+                                d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                            />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Edit Patient Details
+                    </button>
+                    <p
+                        class="sidebar-version"
+                        id="patientFilledHint"
+                        style="
+                            color: #16a34a;
+                            display: none;
+                            margin-top: 6px;
+                            font-size: 0.72rem;
+                        "
+                    >
+                        &#10003; Patient fields filled
+                    </p>
+                </div>
+
+                <!-- Recent Analyses History -->
+                <div class="sidebar-section">
+                    <p class="sidebar-label">
+                        <span class="sidebar-label-row">
+                            <span>Recent Analyses</span>
+                            <button
+                                class="history-clear-btn"
+                                id="historyClearBtn"
+                                onclick="clearHistory()"
+                                title="Clear history"
+                            >
+                                Clear
+                            </button>
+                        </span>
+                    </p>
+                    <div class="history-list" id="historyList">
+                        <p class="history-empty" id="historyEmpty">
+                            No analyses yet this session.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="sidebar-section sidebar-footer">
+                    <div class="privacy-badge">
+                        <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                        >
+                            <path
+                                d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"
+                            />
+                        </svg>
+                        Privacy-Preserving
+                    </div>
+                    <p class="sidebar-version">
+                        v2.0.0 &mdash; PyTorch &amp; Flower FL
+                    </p>
+                </div>
+            </aside>
+
+            <!-- ── MAIN PANEL ────────────────────────────── -->
+            <main class="main-panel" id="mainPanel">
+                <!-- UPLOAD CARD -->
+                <section class="card upload-card" id="uploadCard">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                            >
+                                <path
+                                    d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                                />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            Upload Medical Scan
+                        </h2>
+                        <span class="card-badge" id="scanTypeBadge"
+                            >🧠 Brain MRI</span
+                        >
+                    </div>
+
+                    <div
+                        class="drop-zone"
+                        id="dropZone"
+                        ondragover="handleDragOver(event)"
+                        ondragleave="handleDragLeave(event)"
+                        ondrop="handleDrop(event)"
+                        onclick="document.getElementById('fileInput').click()"
+                        role="button"
+                        tabindex="0"
+                        aria-label="Upload scan — click or drag and drop"
+                        onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('fileInput').click()"
+                    >
+                        <div class="drop-zone-inner" id="dropZoneInner">
+                            <div class="drop-icon">
+                                <svg
+                                    width="48"
+                                    height="48"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                >
+                                    <rect
+                                        x="3"
+                                        y="3"
+                                        width="18"
+                                        height="18"
+                                        rx="3"
+                                    />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                </svg>
+                            </div>
+                            <p class="drop-primary">
+                                Drag &amp; drop your scan here
+                            </p>
+                            <p class="drop-secondary">
+                                or
+                                <span class="drop-link">browse files</span>
+                                &mdash; JPEG, PNG, WebP, BMP, TIFF, GIF, AVIF,
+                                HEIC, DICOM
+                            </p>
+                            <p class="drop-hint">
+                                MRI scans, X-rays, CT images, DICOM (.dcm)
+                                &mdash; any resolution &mdash; max 30 MB
+                            </p>
+                        </div>
+                        <input
+                            type="file"
+                            id="fileInput"
+                            accept="image/jpeg,image/png,image/jpg,image/webp,image/bmp,image/tiff,image/gif,image/avif,image/heic,image/heif,.dcm,application/dicom,application/octet-stream"
+                            hidden
+                            onchange="handleFileSelect(event)"
+                        />
+                    </div>
+
+                    <!-- Upload progress bar -->
+                    <div class="upload-progress-wrap" id="uploadProgressWrap">
+                        <div
+                            class="upload-progress-bar"
+                            id="uploadProgressBar"
+                        ></div>
+                    </div>
+
+                    <!-- Inference options -->
+                    <div class="infer-options" id="inferOptions">
+                        <label
+                            class="infer-opt-item"
+                            title="Compute Grad-CAM attention heatmap and embed it in the PDF report"
+                        >
+                            <input type="checkbox" id="optGradcam" />
+                            🔥 Grad-CAM Heatmap
+                        </label>
+                        <label
+                            class="infer-opt-item"
+                            title="Run Monte Carlo Dropout to estimate prediction uncertainty (slower)"
+                        >
+                            <input type="checkbox" id="optMcDropout" />
+                            📊 Uncertainty (MC-Dropout)
+                        </label>
+                        <label
+                            class="infer-opt-item"
+                            title="Number of MC samples (only applies when Uncertainty is checked)"
+                        >
+                            <span style="color: #94a3b8; font-size: 0.8rem"
+                                >Samples:</span
+                            >
+                            <input
+                                type="number"
+                                id="optMcSamples"
+                                value="20"
+                                min="5"
+                                max="50"
+                                style="
+                                    width: 54px;
+                                    padding: 3px 6px;
+                                    border: 1.5px solid #e2e8f0;
+                                    border-radius: 6px;
+                                    font-size: 0.82rem;
+                                    text-align: center;
+                                "
+                                onclick="event.stopPropagation()"
+                            />
+                        </label>
+                    </div>
+
+                    <!-- Error alert -->
+                    <div
+                        class="alert alert-error"
+                        id="uploadError"
+                        hidden
+                        role="alert"
+                    >
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                        >
+                            <path
+                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                            />
+                        </svg>
+                        <span id="uploadErrorMsg"></span>
+                    </div>
+                </section>
+
+                <!-- RESULTS AREA -->
+                <section class="results-area" id="resultsArea" hidden>
+                    <!-- LEFT: Image Preview -->
+                    <div class="card preview-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <rect
+                                        x="3"
+                                        y="3"
+                                        width="18"
+                                        height="18"
+                                        rx="3"
+                                    />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                </svg>
+                                Image Preview
+                            </h3>
+                            <button
+                                class="btn-icon"
+                                id="clearBtn"
+                                onclick="clearAll()"
+                                title="Clear &amp; upload another scan (Esc)"
+                            >
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="preview-container">
+                            <img
+                                id="previewImage"
+                                class="preview-img"
+                                src=""
+                                alt="Uploaded scan"
+                            />
+                        </div>
+                        <div class="preview-meta">
+                            <span class="meta-item" id="metaFilename"
+                                >&mdash;</span
+                            >
+                            <span class="meta-sep">&middot;</span>
+                            <span class="meta-item" id="metaSize">&mdash;</span>
+                        </div>
+                        <!-- Grad-CAM hint -->
+                        <div class="gradcam-hint hidden" id="gradcamHint">
+                            <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 8 12 12 14 14" />
+                            </svg>
+                            Grad-CAM computed &mdash; embedded in PDF
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: Prediction Results -->
+                    <div class="card prediction-card" id="predictionCard">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <polyline
+                                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                                    />
+                                </svg>
+                                AI Diagnosis
+                            </h3>
+                            <div class="spinner" id="predictionSpinner"></div>
+                        </div>
+
+                        <!-- Scan-type mismatch warning -->
+                        <div
+                            class="mismatch-warning"
+                            id="mismatchWarning"
+                            role="alert"
+                        >
+                            <div class="mismatch-header">
+                                <svg
+                                    width="17"
+                                    height="17"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <path
+                                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                                    />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                <strong>Wrong Scan Type Detected</strong>
+                            </div>
+                            <div class="mismatch-body">
+                                <p id="mismatchMainMsg">
+                                    The image you uploaded does not appear to
+                                    match the selected scan type.
+                                </p>
+                                <div
+                                    class="mismatch-suggestion"
+                                    id="mismatchSuggestion"
+                                >
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="#f59e0b"
+                                        stroke-width="2.5"
+                                    >
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="12" y1="8" x2="12" y2="12" />
+                                        <line
+                                            x1="12"
+                                            y1="16"
+                                            x2="12.01"
+                                            y2="16"
+                                        />
+                                    </svg>
+                                    <span id="mismatchSuggestionText"
+                                        >&mdash;</span
+                                    >
+                                </div>
+                                <div class="mismatch-mass-bar">
+                                    <span
+                                        id="mismatchMassLabel"
+                                        style="white-space: nowrap"
+                                        >&mdash;</span
+                                    >
+                                    <div class="mismatch-bar-wrap">
+                                        <div
+                                            class="mismatch-bar-fill"
+                                            id="mismatchBarFill"
+                                            style="width: 50%"
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px">
+                                    <button
+                                        class="mismatch-switch-btn"
+                                        id="mismatchSwitchBtn"
+                                        onclick="switchToSuggestedMode()"
+                                    >
+                                        <svg
+                                            width="13"
+                                            height="13"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2.5"
+                                        >
+                                            <polyline points="17 1 21 5 17 9" />
+                                            <path
+                                                d="M3 11V9a4 4 0 0 1 4-4h14"
+                                            />
+                                            <polyline points="7 23 3 19 7 15" />
+                                            <path
+                                                d="M21 13v2a4 4 0 0 1-4 4H3"
+                                            />
+                                        </svg>
+                                        Switch to
+                                        <span id="mismatchSwitchLabel"
+                                            >&mdash;</span
+                                        >
+                                        &amp; Re-analyse
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Prediction result badge -->
+                        <div
+                            class="prediction-result"
+                            id="predictionResult"
+                            hidden
+                        >
+                            <div class="result-label" id="resultLabel">
+                                <span class="result-emoji" id="resultEmoji"
+                                    >🧠</span
+                                >
+                                <div class="result-text">
+                                    <p class="result-class" id="resultClass">
+                                        &mdash;
+                                    </p>
+                                    <p class="result-conf" id="resultConf">
+                                        &mdash;
+                                    </p>
+                                </div>
+                                <div
+                                    class="result-risk-badge"
+                                    id="resultRiskBadge"
+                                >
+                                    HIGH
+                                </div>
+                            </div>
+
+                            <!-- Confidence ring -->
+                            <div class="conf-ring-wrap" id="confRingWrap">
+                                <svg
+                                    class="conf-ring-svg"
+                                    width="80"
+                                    height="80"
+                                    viewBox="0 0 90 90"
+                                    aria-hidden="true"
+                                >
+                                    <circle
+                                        class="conf-ring-bg"
+                                        cx="45"
+                                        cy="45"
+                                        r="40"
+                                    />
+                                    <circle
+                                        class="conf-ring-fill"
+                                        id="confRingFill"
+                                        cx="45"
+                                        cy="45"
+                                        r="40"
+                                    />
+                                    <text
+                                        class="conf-ring-text"
+                                        id="confRingText"
+                                        x="45"
+                                        y="45"
+                                    >
+                                        0%
+                                    </text>
+                                </svg>
+                                <span class="conf-ring-label">Confidence</span>
+                            </div>
+
+                            <!-- ICD-10 badge with copy button -->
+                            <div
+                                id="icdBadge"
+                                class="icd-badge"
+                                style="display: none"
+                            >
+                                <svg
+                                    width="11"
+                                    height="11"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <path
+                                        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                                    />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span id="icdCode">&mdash;</span>
+                                <button
+                                    class="icd-copy-btn"
+                                    id="icdCopyBtn"
+                                    onclick="copyIcdCode()"
+                                    title="Copy ICD-10 code"
+                                    aria-label="Copy ICD-10 code"
+                                >
+                                    <svg
+                                        width="11"
+                                        height="11"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                    >
+                                        <rect
+                                            x="9"
+                                            y="9"
+                                            width="13"
+                                            height="13"
+                                            rx="2"
+                                        />
+                                        <path
+                                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Uncertainty panel -->
+                        <div
+                            class="uncertainty-panel"
+                            id="uncertaintyPanel"
+                            style="display: none"
+                            aria-live="polite"
+                        >
+                            <div class="unc-title">
+                                📊 Predictive Uncertainty (MC-Dropout)
+                            </div>
+                            <div class="unc-row">
+                                <span>MC Samples</span>
+                                <span id="uncSamples">&mdash;</span>
+                            </div>
+                            <div class="unc-row">
+                                <span>Mean Entropy</span>
+                                <span id="uncEntropy">&mdash;</span>
+                            </div>
+                            <div class="unc-row">
+                                <span>Std. Confidence</span>
+                                <span id="uncStdConf">&mdash;</span>
+                            </div>
+                            <div class="unc-row">
+                                <span>Uncertainty Level</span>
+                                <span id="uncLabel">&mdash;</span>
+                            </div>
+                        </div>
+
+                        <!-- Probability chart -->
+                        <div class="chart-container" id="chartContainer" hidden>
+                            <p class="chart-title">Class Probabilities</p>
+                            <canvas
+                                id="probChart"
+                                role="img"
+                                aria-label="Class probability bar chart"
+                            ></canvas>
+                        </div>
+
+                        <!-- Predict button -->
+                        <button
+                            class="btn btn-primary btn-predict"
+                            id="predictBtn"
+                            onclick="runPredict()"
+                            title="Run AI analysis (Enter)"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                            >
+                                <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                            Run AI Analysis
+                            <span
+                                class="kbd"
+                                style="margin-left: 6px; opacity: 0.7"
+                                >Enter</span
+                            >
+                        </button>
+                    </div>
+                </section>
+
+                <!-- OCR PANEL -->
+                <section class="card ocr-card" id="ocrCard" hidden>
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                            >
+                                <path
+                                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                                />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                            Extracted Text (OCR)
+                        </h3>
+                        <span class="ocr-elapsed" id="ocrElapsed"></span>
+                    </div>
+                    <div class="ocr-body" id="ocrBody">
+                        <!-- Populated by JS -->
+                    </div>
+                </section>
+
+                <!-- DOCTOR DECISION PANEL -->
+                <section class="card doctor-card" id="doctorCard" hidden>
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                            >
+                                <path
+                                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                                />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            Clinician Review &amp; Confirmation
+                        </h3>
+                        <div class="override-badge" id="overrideBadge" hidden>
+                            AI Override
+                        </div>
+                    </div>
+
+                    <div class="doctor-body">
+                        <div class="doctor-ai-row">
+                            <div class="doctor-field">
+                                <label class="field-label">AI Prediction</label>
+                                <div
+                                    class="field-value ai-value"
+                                    id="doctorAIPred"
+                                >
+                                    &mdash;
+                                </div>
+                            </div>
+                            <div class="doctor-arrow">
+                                <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                    <polyline points="12 5 19 12 12 19" />
+                                </svg>
+                            </div>
+                            <div class="doctor-field">
+                                <label class="field-label"
+                                    >Your Diagnosis</label
+                                >
+                                <select
+                                    class="select-diagnosis"
+                                    id="doctorSelect"
+                                    onchange="handleDoctorSelectChange()"
+                                >
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Clinician identity -->
+                        <div class="clinician-fields">
+                            <div class="clinician-field">
+                                <label for="clinicianName"
+                                    >Clinician Name</label
+                                >
+                                <input
+                                    type="text"
+                                    id="clinicianName"
+                                    placeholder="Dr. &hellip;"
+                                    autocomplete="off"
+                                />
+                            </div>
+                            <div class="clinician-field">
+                                <label for="clinicianId"
+                                    >Clinician ID / GMC No.</label
+                                >
+                                <input
+                                    type="text"
+                                    id="clinicianId"
+                                    placeholder="Optional"
+                                    autocomplete="off"
+                                />
+                            </div>
+                        </div>
+                        <div class="clinician-notes-wrap">
+                            <label for="clinicianNotes"
+                                >Additional Notes (will appear in PDF
+                                report)</label
+                            >
+                            <textarea
+                                id="clinicianNotes"
+                                placeholder="Override rationale, findings, follow-up recommendations&hellip;"
+                            ></textarea>
+                        </div>
+
+                        <div class="doctor-actions">
+                            <button
+                                class="btn btn-success"
+                                id="confirmBtn"
+                                onclick="submitFeedback()"
+                            >
+                                <svg
+                                    width="15"
+                                    height="15"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Confirm &amp; Save
+                            </button>
+                            <button
+                                class="btn btn-pdf"
+                                id="downloadPdfBtn"
+                                onclick="downloadPdfReport()"
+                                disabled
+                                title="Download professional PDF report with Grad-CAM, ICD codes and clinician signature block"
+                            >
+                                <svg
+                                    width="15"
+                                    height="15"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <path
+                                        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                                    />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="9" y1="13" x2="15" y2="13" />
+                                    <line x1="9" y1="17" x2="15" y2="17" />
+                                    <polyline points="9 9 10 9 11 9" />
+                                </svg>
+                                PDF Report
+                            </button>
+                            <button
+                                class="btn btn-txt"
+                                id="downloadBtn"
+                                onclick="downloadReport()"
+                                disabled
+                                title="Download plain-text report (legacy format)"
+                            >
+                                <svg
+                                    width="15"
+                                    height="15"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <path
+                                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                                    />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                TXT Report
+                            </button>
+                        </div>
+
+                        <!-- Alerts -->
+                        <div
+                            class="alert alert-success"
+                            id="feedbackSuccess"
+                            hidden
+                            role="status"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                            >
+                                <path
+                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+                                />
+                            </svg>
+                            <span id="feedbackSuccessMsg"></span>
+                        </div>
+                        <div
+                            class="alert alert-error"
+                            id="feedbackError"
+                            hidden
+                            role="alert"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                            >
+                                <path
+                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                                />
+                            </svg>
+                            <span id="feedbackErrorMsg"></span>
+                        </div>
+                        <div
+                            class="alert alert-error"
+                            id="pdfError"
+                            hidden
+                            role="alert"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                            >
+                                <path
+                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                                />
+                            </svg>
+                            <span id="pdfErrorMsg"></span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- DISCLAIMER -->
+                <div class="disclaimer-bar">
+                    <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        style="flex-shrink: 0"
+                    >
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                        />
+                    </svg>
+                    <span>
+                        <strong>Medical Disclaimer:</strong> This AI tool is
+                        intended to assist qualified clinicians only. It must
+                        not be used as the sole basis for any clinical decision.
+                        All diagnoses must be confirmed by a licensed medical
+                        professional. All images are processed locally &mdash;
+                        no patient data leaves this device unencrypted.
+                    </span>
+                </div>
+            </main>
         </div>
-      </section>
 
-      <!-- DISCLAIMER -->
-      <div class="disclaimer-bar">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-        </svg>
-        <span>
-          <strong>Medical Disclaimer:</strong> This AI tool is intended to assist qualified clinicians only.
-          It must not be used as the sole basis for any clinical decision. All diagnoses must be confirmed
-          by a licensed medical professional. All images are processed locally — no data leaves this device.
-        </span>
-      </div>
-
-    </main>
-  </div>
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <!-- App logic -->
-  <script src="app.js"></script>
-</body>
+        <!-- Chart.js -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+        <!-- App logic -->
+        <script src="app.js"></script>
+    </body>
 </html>

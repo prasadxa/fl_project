@@ -531,7 +531,7 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 
 ---
 
-## Notes
+## Notes-1
 
 - Training runs on **CPU only** — no GPU required; each FL round takes ~7–10 minutes
 - `PYTHONIOENCODING=utf-8` is required on Windows to avoid cp1252 encoding errors with Flower's log output

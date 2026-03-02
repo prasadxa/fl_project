@@ -263,7 +263,13 @@ body {
     transition:
         background var(--t-fast),
         border-color var(--t-fast),
-        transform var(--t-fast);
+        transform var(--t-fast),
+        box-shadow var(--t-fast);
+}
+.scan-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+    border-color: var(--sidebar-active);
 }
 .scan-btn:hover {
     background: var(--brand-navy-light);
@@ -442,7 +448,13 @@ body {
     transition:
         color var(--t-fast),
         border-color var(--t-fast),
-        background var(--t-fast);
+        background var(--t-fast),
+        box-shadow var(--t-fast);
+}
+.btn-icon:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+    border-color: var(--brand-blue);
 }
 .btn-icon:hover {
     color: var(--danger);
@@ -465,6 +477,12 @@ body {
         background var(--t-base),
         transform var(--t-base),
         box-shadow var(--t-base);
+}
+.drop-zone:focus-visible {
+    outline: none;
+    border-style: solid;
+    border-color: var(--brand-blue);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
 }
 .drop-zone:hover,
 .drop-zone.drag-hover {
@@ -1055,6 +1073,21 @@ body {
     background: transparent;
     color: var(--text-mid);
     border-color: var(--border-mid);
+}
+.btn-outline:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+    border-color: var(--brand-blue);
+}
+.btn-success:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.4);
+    border-color: var(--success);
+}
+.btn-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+    border-color: var(--brand-blue-hover);
 }
 .btn-outline:hover:not(:disabled) {
     background: var(--bg);

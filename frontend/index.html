@@ -143,6 +143,11 @@
                 border-color: #30363d;
                 color: #8b949e;
             }
+            [data-theme="dark"] .btn-outline:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+                border-color: #2563eb;
+            }
             [data-theme="dark"] .btn-outline:hover:not(:disabled) {
                 background: #21262d;
                 color: #e6edf3;
@@ -198,6 +203,11 @@
                     color var(--t-fast),
                     border-color var(--t-fast);
                 flex-shrink: 0;
+            }
+            .theme-toggle:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+                border-color: #2563eb;
             }
             .theme-toggle:hover {
                 background: #334155;
@@ -373,7 +383,13 @@
                 cursor: pointer;
                 transition:
                     border-color var(--t-fast),
-                    background var(--t-fast);
+                    background var(--t-fast),
+                    box-shadow var(--t-fast);
+            }
+            .history-item:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+                border-color: #2563eb;
             }
             .history-item:hover {
                 border-color: #2563eb;
@@ -423,6 +439,12 @@
                 padding: 0;
                 text-decoration: underline;
                 text-underline-offset: 2px;
+                border-radius: 3px;
+            }
+            .history-clear-btn:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+                color: #f1f5f9;
             }
             .history-clear-btn:hover {
                 color: #94a3b8;
@@ -474,8 +496,14 @@
                 margin-left: 2px;
                 transition:
                     background var(--t-fast),
-                    color var(--t-fast);
+                    color var(--t-fast),
+                    box-shadow var(--t-fast);
                 vertical-align: middle;
+            }
+            .icd-copy-btn:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+                background: #bfdbfe;
             }
             .icd-copy-btn:hover {
                 background: #bfdbfe;
@@ -572,7 +600,12 @@
                 line-height: 1;
                 padding: 4px 8px;
                 border-radius: 6px;
-                transition: background 0.15s;
+                transition: background 0.15s, box-shadow 0.15s;
+            }
+            .modal-close:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+                background: #f1f5f9;
             }
             .modal-close:hover {
                 background: #f1f5f9;
@@ -714,6 +747,11 @@
                 width: 15px;
                 height: 15px;
                 cursor: pointer;
+            }
+            .infer-opt-item input[type="checkbox"]:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+                border-radius: 2px;
             }
             .infer-opt-item:hover {
                 color: #1e293b;
@@ -907,7 +945,12 @@
                 cursor: pointer;
                 transition:
                     background 0.15s,
-                    color 0.15s;
+                    color 0.15s,
+                    box-shadow 0.15s;
+            }
+            .mismatch-switch-btn:focus-visible {
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.4);
             }
             .mismatch-switch-btn:hover {
                 background: #f59e0b;

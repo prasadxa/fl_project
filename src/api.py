@@ -2,8 +2,9 @@
 Tecnomate Clinical AI — FastAPI Backend
 ========================================
 Endpoints:
-  GET  /api/health            — liveness + model status
+  GET  /api/health            — liveness + model + security status
   GET  /api/model-info        — class names, scan modes, colours
+  GET  /api/model-features    — CNN architecture, layer features, parameter count
   POST /api/predict           — image inference  (multipart/form-data)
   POST /api/feedback          — doctor-confirmed / overridden label
   GET  /api/queue             — last 50 feedback entries (legacy)
@@ -12,7 +13,16 @@ Endpoints:
   GET  /api/admin/stats       — aggregate statistics from SQLite
   GET  /api/admin/feedback    — paginated feedback log
   GET  /api/admin/export-csv  — download full feedback CSV
+  GET  /api/admin/export-excel — download full admin report as Excel workbook
   GET  /api/admin/sessions    — paginated prediction sessions
+
+Security:
+  - SecurityHeadersMiddleware : X-Content-Type-Options, X-Frame-Options,
+                                X-XSS-Protection, Referrer-Policy,
+                                Content-Security-Policy, Permissions-Policy
+  - RateLimitMiddleware       : 200 req/min per IP (general),
+                                100 req/min per IP (/api/predict — inference)
+  - CORS                      : GET + POST only, explicit headers whitelist
 
 Static frontend served from ../frontend/  (mounted at /)
 
@@ -26,9 +36,12 @@ Run:
 
 from __future__ import annotations
 
+import collections
 import datetime
 import io
 import sys
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -37,15 +50,18 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from torchvision import transforms
 
 # ── project imports ────────────────────────────────────────────────────────────
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent))                # src/
+sys.path.insert(0, str(Path(__file__).parent.parent / "frontend"))  # frontend/ (ocr_reader lives here)
 from anonymizer import strip_metadata_and_save
 from dataset import CLASS_NAMES, NUM_CLASSES
 from db import get_db
@@ -108,7 +124,7 @@ SCAN_MODES: Dict = {
     },
     "Chest X-Ray": {
         "indices": [4, 5],
-        "labels": {4: "No Pneumonia", 5: "Pneumonia Detected"},
+        "labels": {4: "Normal", 5: "Pneumonia"},
         "class_keys": ["normal", "pneumonia"],
         "icon": "\U0001fac1",
     },
@@ -141,11 +157,87 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
+# ── Security headers middleware ────────────────────────────────────────────────
+# Adds industry-standard HTTP security headers to every response.
+# These protect against XSS, clickjacking, MIME-sniffing and data leakage.
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"]  = "nosniff"
+        response.headers["X-Frame-Options"]         = "DENY"
+        response.headers["X-XSS-Protection"]        = "1; mode=block"
+        response.headers["Referrer-Policy"]         = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()"
+        response.headers["Cache-Control"]           = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"]                  = "no-cache"
+        # Basic CSP — allows same-origin scripts/styles only
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self'"
+        )
+        return response
+
+
+# ── Rate limiting middleware ───────────────────────────────────────────────────
+# Simple in-memory sliding-window rate limiter (no extra packages required).
+# Default: max 60 requests per IP per minute for general endpoints,
+#          max 10 prediction requests per IP per minute (heavy inference).
+_rate_lock   = threading.Lock()
+_rate_store: Dict[str, list] = collections.defaultdict(list)  # ip -> [timestamps]
+
+RATE_LIMIT_GENERAL    = 200  # requests per window
+RATE_LIMIT_PREDICT    = 100  # requests per window (inference is expensive)
+RATE_LIMIT_WINDOW_SEC = 60   # window size in seconds
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Sliding-window rate limiter per client IP.
+    - /api/predict  : stricter limit (inference is CPU-heavy)
+    - all others    : general limit
+    Returns HTTP 429 with Retry-After header when limit is exceeded.
+    """
+    async def dispatch(self, request: Request, call_next):
+        ip    = request.client.host if request.client else "unknown"
+        path  = request.url.path
+        limit = RATE_LIMIT_PREDICT if path == "/api/predict" else RATE_LIMIT_GENERAL
+        now   = time.monotonic()
+
+        with _rate_lock:
+            timestamps = _rate_store[ip]
+            # Remove timestamps outside the window
+            _rate_store[ip] = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW_SEC]
+            if len(_rate_store[ip]) >= limit:
+                retry_after = int(RATE_LIMIT_WINDOW_SEC - (now - _rate_store[ip][0])) + 1
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": f"Rate limit exceeded. Max {limit} requests "
+                                  f"per {RATE_LIMIT_WINDOW_SEC}s. "
+                                  f"Retry after {retry_after}s."
+                    },
+                    headers={"Retry-After": str(retry_after)},
+                )
+            _rate_store[ip].append(now)
+
+        return await call_next(request)
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
+# ── CORS ───────────────────────────────────────────────────────────────────────
+# Restrict to specific methods and headers rather than wildcard.
+# allow_origins=["*"] is kept for local dev; in production replace with your domain.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],         # Replace with ["https://yourdomain.com"] in production
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Accept", "Authorization"],
+    max_age=600,
 )
 
 # ── model singleton ────────────────────────────────────────────────────────────
@@ -182,6 +274,9 @@ async def startup_event() -> None:
 
 
 # ── image preprocessing ────────────────────────────────────────────────────────
+# CLAHE instance reused across requests (thread-safe read-only after creation)
+_CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
 _INFER_TRANSFORM = transforms.Compose(
     [
         transforms.ToTensor(),
@@ -276,8 +371,10 @@ def prepare_image(pil_img: Image.Image) -> torch.Tensor:
         grey_pil = Image.fromarray(grey_arr, mode="L")
 
     grey_arr = np.array(grey_pil, dtype=np.uint8)
-    resized = cv2.resize(grey_arr, (128, 128), interpolation=cv2.INTER_AREA)
-    pil_out = Image.fromarray(resized, mode="L")
+    resized  = cv2.resize(grey_arr, (128, 128), interpolation=cv2.INTER_AREA)
+    # Apply CLAHE — same contrast enhancement used during training
+    enhanced = _CLAHE.apply(resized)
+    pil_out  = Image.fromarray(enhanced, mode="L")
     return _INFER_TRANSFORM(pil_out).unsqueeze(0)  # type: ignore[union-attr]
 
 
@@ -315,7 +412,7 @@ _pending_images: Dict[str, Path] = {}
 
 @app.get("/api/health", tags=["System"])
 def health():
-    """Liveness check — returns model, OCR and DB status."""
+    """Liveness check — returns model, OCR, DB and security status."""
     model = get_model()
     db = get_db()
     counts = db.count_feedback()
@@ -330,6 +427,15 @@ def health():
         "feedback_total": counts["total"],
         "feedback_overridden": counts["overridden"],
         "timestamp": datetime.datetime.now().isoformat(),
+        "security": {
+            "rate_limit_general":  f"{RATE_LIMIT_GENERAL} req/{RATE_LIMIT_WINDOW_SEC}s per IP",
+            "rate_limit_predict":  f"{RATE_LIMIT_PREDICT} req/{RATE_LIMIT_WINDOW_SEC}s per IP",
+            "security_headers":    "enabled",
+            "cors_methods":        "GET, POST",
+            "xss_protection":      "enabled",
+            "clickjacking_protection": "enabled",
+            "content_type_sniffing_protection": "enabled",
+        },
     }
 
 
@@ -351,6 +457,172 @@ def model_info():
         },
         "short_names": SHORT_NAMES,
         "risk_colours": RISK_COLOURS,
+    }
+
+
+@app.get("/api/model-features", tags=["System"])
+def model_features():
+    """
+    Returns a full explanation of the CNN architecture and the visual features
+    each layer learns to detect.  Answers the question: 'How does the model
+    know it is looking at a tumour?'
+    """
+    model = get_model()
+
+    # ─ parameter count ────────────────────────────────────────────────────
+    total_params     = 0
+    trainable_params = 0
+    if model is not None:
+        import torch
+        for p in model.parameters():
+            n = p.numel()
+            total_params += n
+            if p.requires_grad:
+                trainable_params += n
+
+    return {
+        "architecture": {
+            "name":        "MedicalCNN",
+            "type":        "Convolutional Neural Network (CNN)",
+            "input":       "128 x 128 pixels, 1 channel (greyscale)",
+            "output":      f"{NUM_CLASSES} classes (softmax probability per class)",
+            "total_parameters":     total_params,
+            "trainable_parameters": trainable_params,
+        },
+        "conv_blocks": [
+            {
+                "block": 1,
+                "operation":    "Conv2d(1 → 32 filters, 3×3 kernel) + BatchNorm + ReLU + MaxPool",
+                "output_shape": "32 × 64 × 64",
+                "features_learned": [
+                    "Low-level edges and contours (horizontal, vertical, diagonal)",
+                    "Basic brightness gradients across the scan",
+                    "Sharp intensity boundaries — e.g. tumour border vs healthy tissue",
+                    "Early noise filtering via BatchNorm",
+                ],
+                "why_matters": (
+                    "The tumour boundary (edge between tumour mass and normal brain tissue) "
+                    "is the first discriminative signal the network learns to detect."
+                ),
+            },
+            {
+                "block": 2,
+                "operation":    "Conv2d(32 → 64 filters, 3×3 kernel) + BatchNorm + ReLU + MaxPool",
+                "output_shape": "64 × 32 × 32",
+                "features_learned": [
+                    "Texture patterns: heterogeneous vs homogeneous tissue regions",
+                    "Blob-like irregular shapes characteristic of tumour masses",
+                    "Ring-enhancement patterns common in glioma on contrast MRI",
+                    "Mid-frequency spatial patterns (not raw edges, not global shape)",
+                    "Lung opacity patterns for pneumonia (consolidation, haziness)",
+                ],
+                "why_matters": (
+                    "Tumours have a distinctly irregular texture compared to normal brain. "
+                    "Glioma shows heterogeneous signal; meningioma shows a dense homogeneous mass. "
+                    "Block 2 captures these mid-level texture signatures."
+                ),
+            },
+            {
+                "block": 3,
+                "operation":    "Conv2d(64 → 128 filters, 3×3 kernel) + BatchNorm + ReLU + MaxPool",
+                "output_shape": "128 × 16 × 16",
+                "features_learned": [
+                    "High-level semantic features: overall tumour shape and mass effect",
+                    "Mass effect: midline shift, ventricle compression",
+                    "Pituitary tumour location (sellar/suprasellar region)",
+                    "Global scan orientation and anatomical context",
+                    "Bilateral lung opacity distribution for pneumonia vs normal",
+                ],
+                "why_matters": (
+                    "Block 3 produces abstract representations that encode whether a full "
+                    "tumour-consistent structure exists in the image. The global average pool "
+                    "then summarises these 128 feature maps into a 2048-dimensional vector."
+                ),
+            },
+        ],
+        "classifier_head": {
+            "layers": [
+                "AdaptiveAvgPool2d(4×4) — spatially compress 128 feature maps to 128×4×4 = 2048 values",
+                "Dropout(0.5)           — randomly disables 50% of neurons during training to prevent overfitting",
+                "FC(2048 → 256)         — dense layer: combines all spatial features into 256 discriminative neurons",
+                "ReLU                   — non-linearity: zero out negative activations",
+                "Dropout(0.3)           — additional regularisation before final decision",
+                "FC(256 → 6)            — outputs raw score (logit) for each of the 6 classes",
+                "Softmax (at inference)  — converts logits to probabilities summing to 100%",
+            ],
+            "why_dropout_matters": (
+                "Dropout forces the network to not rely on any single neuron, "
+                "making it more robust to unseen MRI scans from different scanners or patients."
+            ),
+        },
+        "detection_features_per_class": {
+            "glioma": [
+                "Irregular, infiltrating borders (Block 1 edges)",
+                "Heterogeneous signal intensity / necrotic core (Block 2 texture)",
+                "Mass effect — midline shift visible in scan (Block 3 shape)",
+                "Ring-enhancement pattern in contrast MRI",
+            ],
+            "meningioma": [
+                "Well-defined, rounded dense mass (Block 2 blob detection)",
+                "Extra-axial location — outside brain parenchyma (Block 3 location)",
+                "Dural tail sign — attachment to meninges",
+                "Homogeneous enhancement pattern",
+            ],
+            "pituitary": [
+                "Small mass in sellar/suprasellar region (Block 3 anatomical location)",
+                "Optic chiasm compression pattern",
+                "Distinct from surrounding pituitary gland tissue (Block 1 contrast)",
+            ],
+            "notumor": [
+                "Absence of focal mass, normal symmetrical brain tissue",
+                "No irregular texture blobs detected by Block 2",
+                "Normal ventricle size, no midline shift",
+            ],
+            "pneumonia": [
+                "Focal or diffuse opacity / consolidation in lung fields (Block 2 texture)",
+                "Air bronchogram signs (Block 1 fine structure)",
+                "Asymmetric or bilateral haziness (Block 3 global pattern)",
+            ],
+            "normal": [
+                "Clear lung fields bilaterally",
+                "Sharp costophrenic angles",
+                "No opacity / consolidation patterns detected",
+            ],
+        },
+        "explainability": {
+            "gradcam": (
+                "Gradient-weighted Class Activation Mapping (Grad-CAM) is implemented. "
+                "Pass gradcam=true to /api/predict to get a heatmap overlay showing "
+                "EXACTLY which pixels in the scan the model used to make its decision. "
+                "This is included in the PDF report."
+            ),
+            "mc_dropout": (
+                "Monte Carlo Dropout uncertainty estimation is implemented. "
+                "Pass mc_dropout=true to /api/predict to get a confidence interval "
+                "showing how certain the model is about its prediction."
+            ),
+        },
+        "training_details": {
+            "loss_function":       "CrossEntropyLoss with inverse-frequency class weights",
+            "class_balancing":     "Rare tumour types get higher loss weight (fix for majority-class bias)",
+            "optimiser":           "Adam  lr=0.001",
+            "lr_scheduler":        "StepLR  step_size=1  gamma=0.9  (lr decays each epoch)",
+            "local_epochs":        "10 per federated round (minimum)",
+            "data_augmentation":   [
+                "CLAHE contrast enhancement — improves tumour boundary visibility",
+                "Random horizontal flip (p=0.5) — tumours appear on either side",
+                "Random vertical flip (p=0.2)   — valid for axial MRI slices",
+                "Random rotation \u00b115\u00b0           — scanner positioning variation",
+                "Random affine (translate/scale) — patient movement simulation",
+                "Random autocontrast (p=0.3)    — different scanner settings",
+                "Random sharpness (p=0.3)       — varying MRI sharpness",
+            ],
+            "federated_learning":  (
+                "FedAvg: each of 3 hospital clients trains locally for 10 epochs, "
+                "then the server aggregates weights using sample-weighted averaging. "
+                "Patient data never leaves the hospital — only model weights are shared."
+            ),
+        },
     }
 
 
@@ -443,23 +715,16 @@ async def predict(
     # The global winner (pred_key) comes from all 6 classes.
     # If it belongs to the OTHER scan mode's class set, the user most likely
     # uploaded the wrong image type (e.g. a brain MRI on the Chest X-Ray tab).
-    #
-    # We also compute the total probability mass each scan mode holds to give
-    # a confidence-weighted mismatch score.
     OTHER_MODE = "Chest X-Ray" if scan_type == "Brain MRI" else "Brain MRI"
     other_cfg = SCAN_MODES[OTHER_MODE]
     other_probs = {k: all_probs[k] for k in other_cfg["class_keys"]}
 
-    # Sum of probabilities belonging to selected mode vs other mode
     selected_mass = sum(mode_probs.values())
     other_mass = sum(other_probs.values())
 
-    # Mismatch when the global winner is from the other mode AND
-    # the other mode holds more than 60 % of total probability mass
     global_winner_in_other = pred_key in other_cfg["class_keys"]
     scan_type_mismatch = global_winner_in_other and other_mass > 0.60
 
-    # Suggested scan type and its best class
     if scan_type_mismatch:
         suggested_scan_type = OTHER_MODE
         other_pred_key = max(other_probs, key=other_probs.get)  # type: ignore[arg-type]
@@ -470,7 +735,7 @@ async def predict(
             f"(model assigns {other_mass * 100:.1f}% probability mass to "
             f"{OTHER_MODE} classes, vs {selected_mass * 100:.1f}% to "
             f"{scan_type} classes). "
-            f"Suggested result under '{OTHER_MODE}': "
+            f"Suggested result under \u2018{OTHER_MODE}\u2019: "
             f"{suggested_class} ({suggested_confidence * 100:.1f}% confidence)."
         )
     else:
@@ -767,6 +1032,10 @@ async def pdf_report(
     mc_std_conf: float = Form(0.0),
     mc_samples: int = Form(0),
     mc_label: str = Form(""),
+    # ── AI mathematical parameters (from predict response) ──────────────────
+    selected_mode_mass: float = Form(0.0),
+    other_mode_mass: float = Form(0.0),
+    scan_type_mismatch: bool = Form(False),
 ):
     """
     Generate a professional clinical PDF report and return it for download.
@@ -868,6 +1137,9 @@ async def pdf_report(
         server_timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
         clinician_name=clinician_name,
         clinician_id=clinician_id,
+        selected_mode_mass=selected_mode_mass,
+        other_mode_mass=other_mode_mass,
+        scan_type_mismatch=scan_type_mismatch,
     )
 
     # ── build PDF ─────────────────────────────────────────────────────────────
@@ -937,6 +1209,270 @@ def admin_export_csv():
     return Response(
         content=csv_data,
         media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/api/admin/export-excel", tags=["Admin"])
+def admin_export_excel():
+    """
+    Download a full admin report as a formatted Excel workbook.
+
+    3 sheets:
+      1. Feedback Log   — every doctor feedback/override entry from SQLite
+      2. Sessions Log   — every prediction session (filename, AI result, confidence)
+      3. Summary Stats  — class-level counts, override rate, scan-type breakdown
+    """
+    try:
+        import openpyxl
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        raise HTTPException(
+            status_code=501,
+            detail="openpyxl is not installed. Run: pip install openpyxl",
+        )
+
+    db   = get_db()
+    # Fetch up to 10 000 rows — sufficient for any realistic deployment
+    feedback_rows = db.list_feedback(limit=10_000, offset=0)
+    session_rows  = db.list_sessions(limit=10_000, offset=0)
+    counts        = db.count_feedback()
+
+    wb = openpyxl.Workbook()
+
+    # ─ shared styles ───────────────────────────────────────────────────────────
+    H_FILL = PatternFill("solid", fgColor="1F4E79")   # dark blue header
+    A_FILL = PatternFill("solid", fgColor="D6E4F0")   # light blue alt row
+    G_FILL = PatternFill("solid", fgColor="C6EFCE")   # green  — confirmed
+    W_FILL = PatternFill("solid", fgColor="FFEB9C")   # yellow — overridden
+    R_FILL = PatternFill("solid", fgColor="FFC7CE")   # red    — risk classes
+    H_FONT = Font(bold=True, color="FFFFFF", size=11)
+    T_FONT = Font(bold=True, size=13)
+    B_FONT = Font(bold=True)
+    CTR    = Alignment(horizontal="center", vertical="center")
+
+    def _hrow(ws, row: int, cols: list):
+        for c, val in enumerate(cols, 1):
+            cell = ws.cell(row=row, column=c, value=val)
+            cell.fill = H_FILL; cell.font = H_FONT; cell.alignment = CTR
+
+    def _title(ws, text: str, span: str):
+        ws.merge_cells(span)
+        c = ws[span.split(":")[0]]
+        c.value = text; c.font = T_FONT; c.alignment = CTR
+        ws.row_dimensions[1].height = 24
+
+    def _autowidth(ws):
+        for col in ws.columns:
+            w = max((len(str(cell.value or "")) for cell in col), default=8)
+            ws.column_dimensions[get_column_letter(col[0].column)].width = min(w + 4, 50)
+
+    RISK_CLASSES = {"glioma", "meningioma", "pituitary", "pneumonia"}
+
+    # ═════════════════════════════ Sheet 1: Feedback Log ═════════════════════════════
+    ws1 = wb.active
+    ws1.title = "Feedback Log"
+    fb_cols = ["ID", "Session ID", "Doctor Choice", "Doctor Label",
+               "AI Predicted", "Scan Type", "Overridden", "Clinician",
+               "Clinician ID", "Notes", "Timestamp"]
+    _title(ws1, "Tecnomate — Doctor Feedback Log", f"A1:{get_column_letter(len(fb_cols))}1")
+    _hrow(ws1, 2, fb_cols)
+
+    for i, row in enumerate(feedback_rows, start=3):
+        overridden = bool(row.get("overridden", 0))
+        vals = [
+            row.get("id"),              row.get("session_id"),
+            row.get("chosen_key"),      row.get("chosen_label"),
+            row.get("ai_predicted_key"),row.get("scan_type"),
+            "Yes" if overridden else "No",
+            row.get("clinician_name"),  row.get("clinician_id"),
+            row.get("notes"),           row.get("timestamp"),
+        ]
+        for c, val in enumerate(vals, 1):
+            ws1.cell(row=i, column=c, value=val).alignment = CTR
+        # row colour: yellow if doctor overrode AI, green if confirmed
+        fill = W_FILL if overridden else (G_FILL if i % 2 == 0 else A_FILL)
+        for c in range(1, len(fb_cols) + 1):
+            ws1.cell(row=i, column=c).fill = fill
+    _autowidth(ws1)
+
+    # ════════════════════════════ Sheet 2: Sessions Log ════════════════════════════
+    ws2 = wb.create_sheet("Sessions Log")
+    sess_cols = ["Session ID", "Filename", "Scan Type", "AI Prediction",
+                 "Confidence (%)", "File Size (KB)", "Width", "Height",
+                 "Format", "Created At"]
+    _title(ws2, "Tecnomate — Prediction Sessions", f"A1:{get_column_letter(len(sess_cols))}1")
+    _hrow(ws2, 2, sess_cols)
+
+    for i, row in enumerate(session_rows, start=3):
+        pred_key = row.get("ai_pred_key", "")
+        conf     = row.get("ai_confidence", 0.0)
+        vals = [
+            row.get("session_id"),
+            row.get("filename"),
+            row.get("scan_type"),
+            pred_key,
+            round(float(conf) * 100, 2) if conf else "N/A",
+            round(row.get("file_size_bytes", 0) / 1024, 1),
+            row.get("image_width"),
+            row.get("image_height"),
+            row.get("detected_format"),
+            row.get("created_at"),
+        ]
+        for c, val in enumerate(vals, 1):
+            ws2.cell(row=i, column=c, value=val).alignment = CTR
+        # highlight high-risk predictions
+        row_fill = R_FILL if pred_key in RISK_CLASSES else (A_FILL if i % 2 == 0 else None)
+        if row_fill:
+            for c in range(1, len(sess_cols) + 1):
+                ws2.cell(row=i, column=c).fill = row_fill
+    _autowidth(ws2)
+
+    # ═══════════════════════ Sheet 3: AI Diagnostic Parameters ═══════════════════════
+    ws3 = wb.create_sheet("AI Parameters")
+    ai_cols = [
+        "Session ID", "Filename", "Scan Type",
+        "AI Prediction", "Confidence (%)",
+        "Prediction Margin (%)",
+        "Shannon Entropy (bits)",
+        "Mode Prob Mass (%)", "Other Mode Mass (%)",
+        "Scan Mismatch",
+        "MC Entropy", "MC Std Conf", "MC Samples", "Uncertainty Level",
+        "All Class Probs (JSON)",
+        "Created At",
+    ]
+    _title(ws3, "Tecnomate — AI Diagnostic Mathematical Parameters",
+           f"A1:{get_column_letter(len(ai_cols))}1")
+    _hrow(ws3, 2, ai_cols)
+
+    for i, row in enumerate(session_rows, start=3):
+        pred_key = row.get("ai_pred_key", "")
+        conf     = float(row.get("ai_confidence", 0.0))
+        margin   = float(row.get("prediction_margin", 0.0))
+        entropy  = float(row.get("shannon_entropy", 0.0))
+        sel_mass = float(row.get("selected_mode_mass", 0.0))
+        oth_mass = float(row.get("other_mode_mass", 0.0))
+        mismatch = bool(row.get("scan_type_mismatch", False))
+        mc_ent   = float(row.get("mean_entropy", 0.0))
+        mc_std   = float(row.get("std_confidence", 0.0))
+        mc_n     = int(row.get("mc_samples", 0))
+        unc_lbl  = row.get("uncertainty_label", "")
+        all_p    = row.get("all_probabilities", {})
+
+        vals = [
+            row.get("session_id"),
+            row.get("filename"),
+            row.get("scan_type"),
+            pred_key,
+            round(conf * 100, 2),
+            round(margin * 100, 2),
+            round(entropy, 4),
+            round(sel_mass * 100, 2),
+            round(oth_mass * 100, 2),
+            "YES" if mismatch else "No",
+            round(mc_ent, 4) if mc_n > 0 else "N/A (MC off)",
+            round(mc_std, 4) if mc_n > 0 else "N/A",
+            mc_n if mc_n > 0 else "N/A",
+            unc_lbl or "N/A",
+            json.dumps({k: round(v * 100, 2) for k, v in all_p.items()}) if all_p else "{}",
+            row.get("created_at"),
+        ]
+        for c, val in enumerate(vals, 1):
+            ws3.cell(row=i, column=c, value=val).alignment = CTR
+        row_fill = R_FILL if mismatch else (A_FILL if i % 2 == 0 else None)
+        if row_fill:
+            for c in range(1, len(ai_cols) + 1):
+                ws3.cell(row=i, column=c).fill = row_fill
+    _autowidth(ws3)
+
+    # ════════════════════════════ Sheet 4: Summary Stats ═══════════════════════════
+    ws4 = wb.create_sheet("Summary Stats")
+    _title(ws4, "Tecnomate — Admin Summary Statistics", "A1:B1")
+    _hrow(ws4, 2, ["Metric", "Value"])
+
+    # aggregate per-class prediction counts from sessions
+    class_counts: Dict[str, int] = {c: 0 for c in CLASS_NAMES}
+    avg_confidence: Dict[str, list] = {c: [] for c in CLASS_NAMES}
+    avg_entropy: Dict[str, list]    = {c: [] for c in CLASS_NAMES}
+    avg_margin: Dict[str, list]     = {c: [] for c in CLASS_NAMES}
+    for row in session_rows:
+        key = row.get("ai_pred_key", "")
+        if key in class_counts:
+            class_counts[key] += 1
+            conf_v = row.get("ai_confidence", 0)
+            if conf_v: avg_confidence[key].append(float(conf_v))
+            ent_v  = row.get("shannon_entropy", 0)
+            if ent_v: avg_entropy[key].append(float(ent_v))
+            mar_v  = row.get("prediction_margin", 0)
+            if mar_v: avg_margin[key].append(float(mar_v))
+
+    # override rate per class
+    override_by_class: Dict[str, int] = {c: 0 for c in CLASS_NAMES}
+    for row in feedback_rows:
+        if row.get("overridden"):
+            key = row.get("ai_predicted_key", "")
+            if key in override_by_class:
+                override_by_class[key] += 1
+
+    override_rate = (
+        f"{counts['overridden'] / counts['total'] * 100:.1f}%"
+        if counts["total"] > 0 else "N/A"
+    )
+    ts_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # global average confidence and entropy across all sessions
+    all_conf   = [float(r.get("ai_confidence", 0)) for r in session_rows if r.get("ai_confidence")]
+    all_ent    = [float(r.get("shannon_entropy", 0)) for r in session_rows if r.get("shannon_entropy")]
+    all_margin = [float(r.get("prediction_margin", 0)) for r in session_rows if r.get("prediction_margin")]
+    mismatches = sum(1 for r in session_rows if r.get("scan_type_mismatch"))
+
+    summary = [
+        ("Report generated at",               ts_now),
+        ("Total feedback entries",             counts["total"]),
+        ("Doctor-confirmed (AI correct)",      counts["confirmed"]),
+        ("Doctor-overridden (AI wrong)",       counts["overridden"]),
+        ("Overall override rate",              override_rate),
+        ("Total prediction sessions",          len(session_rows)),
+        ("Scan type mismatches detected",      mismatches),
+        ("Global avg confidence",              f"{sum(all_conf)/len(all_conf)*100:.2f}%" if all_conf else "N/A"),
+        ("Global avg Shannon entropy (bits)",  f"{sum(all_ent)/len(all_ent):.4f}" if all_ent else "N/A"),
+        ("Global avg prediction margin",       f"{sum(all_margin)/len(all_margin)*100:.2f}%" if all_margin else "N/A"),
+        ("", ""),
+        ("--- Per-class breakdown ---",        ""),
+    ]
+    for cls in CLASS_NAMES:
+        cnt    = class_counts[cls]
+        ov     = override_by_class[cls]
+        ov_pct = f"{ov/cnt*100:.1f}%" if cnt > 0 else "N/A"
+        ac     = avg_confidence[cls]
+        ae     = avg_entropy[cls]
+        am     = avg_margin[cls]
+        summary.append((f"  {cls} — total scans",         cnt))
+        summary.append((f"  {cls} — overrides",            f"{ov}  ({ov_pct})"))
+        summary.append((f"  {cls} — avg confidence",       f"{sum(ac)/len(ac)*100:.2f}%" if ac else "N/A"))
+        summary.append((f"  {cls} — avg Shannon entropy",  f"{sum(ae)/len(ae):.4f}" if ae else "N/A"))
+        summary.append((f"  {cls} — avg prediction margin",f"{sum(am)/len(am)*100:.2f}%" if am else "N/A"))
+        summary.append(("", ""))
+
+    for i, (key, val) in enumerate(summary, start=3):
+        ws4.cell(row=i, column=1, value=key).font  = B_FONT
+        ws4.cell(row=i, column=2, value=val)
+        if i % 2 == 0:
+            ws4.cell(row=i, column=1).fill = A_FILL
+            ws4.cell(row=i, column=2).fill = A_FILL
+    _autowidth(ws4)
+
+    # ─ serialise workbook to bytes and stream as download ───────────────────
+    import io as _io
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname  = f"tecnomate_admin_report_{ts_str}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 

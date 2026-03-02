@@ -687,6 +687,70 @@
             }
 
             /* ════════════════════════════════════════════════════════
+               FEATURES PANEL
+            ════════════════════════════════════════════════════════ */
+            .features-panel {
+                margin-top: 10px;
+                padding: 12px 14px;
+                border-radius: 8px;
+                border: 1.5px solid #bfdbfe;
+                background: #eff6ff;
+                font-size: 0.82rem;
+            }
+            [data-theme="dark"] .features-panel {
+                background: #0f172a;
+                border-color: #1e3a5f;
+            }
+            .features-panel .feat-title {
+                font-weight: 700;
+                font-size: 0.78rem;
+                color: #1d4ed8;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            [data-theme="dark"] .features-panel .feat-title { color: #60a5fa; }
+            .feat-row {
+                display: grid;
+                grid-template-columns: 130px 1fr;
+                gap: 4px 10px;
+                padding: 4px 0;
+                border-bottom: 1px solid #dbeafe;
+                align-items: start;
+            }
+            [data-theme="dark"] .feat-row { border-color: #1e3a5f; }
+            .feat-row:last-child { border-bottom: none; }
+            .feat-label {
+                font-weight: 600;
+                color: #1e40af;
+                font-size: 0.78rem;
+                white-space: nowrap;
+            }
+            [data-theme="dark"] .feat-label { color: #93c5fd; }
+            .feat-value {
+                color: var(--text-primary, #1e293b);
+                line-height: 1.45;
+                font-size: 0.8rem;
+            }
+            [data-theme="dark"] .feat-value { color: #e2e8f0; }
+            .feat-pipeline {
+                margin-bottom: 8px;
+                padding: 5px 8px;
+                background: #dbeafe;
+                border-radius: 5px;
+                color: #1e3a8a;
+                font-size: 0.78rem;
+                line-height: 1.5;
+            }
+            [data-theme="dark"] .feat-pipeline {
+                background: #1e2d40;
+                color: #93c5fd;
+            }
+
+            /* ════════════════════════════════════════════════════════
                INFERENCE OPTIONS ROW
             ════════════════════════════════════════════════════════ */
             .infer-options {
@@ -747,6 +811,21 @@
                 transform: translateY(-1px);
             }
             .btn-txt:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            .btn-excel {
+                background: linear-gradient(135deg, #16a34a, #15803d);
+                color: #fff;
+                border: none;
+            }
+            .btn-excel:hover:not(:disabled) {
+                background: linear-gradient(135deg, #15803d, #166534);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+            }
+            .btn-excel:disabled {
                 opacity: 0.45;
                 cursor: not-allowed;
             }
@@ -2001,6 +2080,30 @@
                             </div>
                         </div>
 
+                        <!-- Features panel -->
+                        <div class="features-panel" id="featuresPanel" style="display:none" aria-live="polite">
+                            <div class="feat-title">
+                                🔬 Key Visual Features Detected
+                            </div>
+                            <div class="feat-pipeline" id="featPipeline"></div>
+                            <div class="feat-row">
+                                <span class="feat-label">Primary Features</span>
+                                <span class="feat-value" id="featPrimary">&mdash;</span>
+                            </div>
+                            <div class="feat-row">
+                                <span class="feat-label">Texture &amp; Edges</span>
+                                <span class="feat-value" id="featTexture">&mdash;</span>
+                            </div>
+                            <div class="feat-row">
+                                <span class="feat-label">Spatial Context</span>
+                                <span class="feat-value" id="featSpatial">&mdash;</span>
+                            </div>
+                            <div class="feat-row">
+                                <span class="feat-label">Differentiates By</span>
+                                <span class="feat-value" id="featDiff">&mdash;</span>
+                            </div>
+                        </div>
+
                         <!-- Probability chart -->
                         <div class="chart-container" id="chartContainer" hidden>
                             <p class="chart-title">Class Probabilities</p>
@@ -2231,6 +2334,29 @@
                                 </svg>
                                 TXT Report
                             </button>
+                            <button
+                                class="btn btn-excel"
+                                id="downloadExcelBtn"
+                                onclick="downloadExcelReport()"
+                                disabled
+                                title="Export feedback & sessions log as Excel workbook"
+                            >
+                                <svg
+                                    width="15"
+                                    height="15"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                >
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="3" y1="9" x2="21" y2="9" />
+                                    <line x1="3" y1="15" x2="21" y2="15" />
+                                    <line x1="9" y1="3" x2="9" y2="21" />
+                                    <line x1="15" y1="3" x2="15" y2="21" />
+                                </svg>
+                                Excel Export
+                            </button>
                         </div>
 
                         <!-- Alerts -->
@@ -2316,8 +2442,15 @@
             </main>
         </div>
 
-        <!-- Chart.js -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+        <!-- Chart.js (local copy; CDN fallback if file missing) -->
+        <script src="chart.umd.min.js"></script>
+        <script>
+            if (typeof Chart === "undefined") {
+                var s = document.createElement("script");
+                s.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js";
+                document.head.appendChild(s);
+            }
+        </script>
         <!-- App logic -->
         <script src="app.js"></script>
     </body>

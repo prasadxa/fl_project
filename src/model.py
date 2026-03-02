@@ -1,96 +1,194 @@
 """
-Phase 3 - PyTorch Model (6-class version)
-==========================================
-MedicalCNN      : 3-block CNN (1-ch 128x128 input -> 6 classes).
-train_one_round : local training, returns (loss, accuracy).
-evaluate        : inference only, returns (loss, accuracy).
-get_parameters  : model -> list[np.ndarray]   (Flower helper)
-set_parameters  : list[np.ndarray] -> model   (Flower helper)
+Phase 3 - PyTorch Model (ResNet-18, 6-class, FedProx version)
+=============================================================
+MedicalCNN      : ResNet-18 adapted for 1-channel 192x192 grayscale input,
+                  6-class output. NO Softmax — raw logits only.
+train_fedprox   : FedProx local training with proximal regularisation term.
+                  L = CrossEntropyLoss + (mu/2) * ||W_local − W_global||^2
+train_one_round : alias kept for backward compatibility.
+evaluate        : inference + per-class accuracy, returns (loss, acc, per_class_acc).
+get_parameters  : model -> list[np.ndarray]
+set_parameters  : list[np.ndarray] -> model
 """
 
 from __future__ import annotations
 
+import copy
 from collections import OrderedDict
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torchvision import models
 
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
 
 class MedicalCNN(nn.Module):
     """
-    Lightweight 3-block CNN for 1-channel 128x128 medical images.
+    ResNet-18 adapted for medical image classification.
 
-    Architecture:
-        Block 1: Conv(1->32)   + BN + ReLU + MaxPool  -> 64x64
-        Block 2: Conv(32->64)  + BN + ReLU + MaxPool  -> 32x32
-        Block 3: Conv(64->128) + BN + ReLU + MaxPool  -> 16x16
-        AdaptiveAvgPool                               ->  4x4
-        Dropout(0.5) -> FC(2048->256) -> ReLU -> Dropout(0.3) -> FC(256->num_classes)
+    Changes from the standard ImageNet ResNet-18:
+      - conv1 accepts 1 input channel (grayscale) instead of 3.
+      - fc outputs num_classes logits instead of 1000.
+      - NO Softmax — CrossEntropyLoss works on raw logits.
     """
 
     def __init__(self, num_classes: int = 6):
         super().__init__()
+        # Load standard ResNet-18 (no pretrained weights — we train from scratch
+        # on medical data; ImageNet weights are harmful for grayscale MRI/X-ray)
+        backbone = models.resnet18(weights=None)
 
-        def conv_block(in_ch: int, out_ch: int) -> nn.Sequential:
-            return nn.Sequential(
-                nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
-                nn.BatchNorm2d(out_ch),
-                nn.ReLU(inplace=True),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-            )
+        # Replace first conv: 3 channels -> 1 channel (grayscale)
+        # Keep all other hyperparameters (kernel 7, stride 2, padding 3)
+        backbone.conv1 = nn.Conv2d(
+            1, 64, kernel_size=7, stride=2, padding=3, bias=False
+        )
 
-        self.features = nn.Sequential(
-            conv_block(1,   32),
-            conv_block(32,  64),
-            conv_block(64, 128),
-        )
-        self.pool = nn.AdaptiveAvgPool2d((4, 4))
-        self.classifier = nn.Sequential(
-            nn.Dropout(p=0.5),
-            nn.Linear(128 * 4 * 4, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=0.3),
-            nn.Linear(256, num_classes),
-        )
+        # Replace final fc: 512 -> num_classes (raw logits, no Softmax)
+        backbone.fc = nn.Linear(512, num_classes)
+
+        self.model = backbone
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.features(x)
-        x = self.pool(x)
-        x = x.view(x.size(0), -1)
-        return self.classifier(x)
+        return self.model(x)   # returns raw logits
 
 
+# ---------------------------------------------------------------------------
+# Parameter helpers (FedProx / FedAvg aggregation)
+# ---------------------------------------------------------------------------
+
+def get_parameters(model: nn.Module) -> List[np.ndarray]:
+    """Flatten all model parameters to a list of numpy arrays."""
+    return [val.cpu().detach().numpy() for val in model.state_dict().values()]
 
 
-def train_one_round(
+def set_parameters(model: nn.Module, parameters: List[np.ndarray]) -> None:
+    """Load a list of numpy arrays back into the model."""
+    state_dict = OrderedDict(
+        {k: torch.tensor(v, dtype=model.state_dict()[k].dtype)
+         for k, v in zip(model.state_dict().keys(), parameters)}
+    )
+    model.load_state_dict(state_dict, strict=True)
+
+
+# ---------------------------------------------------------------------------
+# FedProx local training
+# ---------------------------------------------------------------------------
+
+def train_fedprox(
     model: nn.Module,
+    global_params: List[np.ndarray],
     loader: DataLoader,
     epochs: int = 2,
-    lr: float   = 1e-3,
+    lr: float = 0.01,
+    momentum: float = 0.9,
+    weight_decay: float = 1e-4,
+    mu: float = 0.01,
     device: str = "cpu",
+    class_weights: Optional[torch.Tensor] = None,
 ) -> Tuple[float, float]:
+    """
+    FedProx local training for one federated round.
+
+    Loss = CrossEntropyLoss(logits, labels)
+         + (mu / 2) * ||W_local - W_global||^2
+
+    The proximal term (mu/2)*||W_local - W_global||^2 prevents local models
+    from diverging too far from the global model, which is the key advantage
+    of FedProx over plain FedAvg on heterogeneous (non-IID) data.
+
+    Parameters
+    ----------
+    model         : local model (initialised with global weights before calling)
+    global_params : snapshot of global weights at the start of this round
+    loader        : client's local DataLoader (WeightedRandomSampler inside)
+    epochs        : number of local epochs (default 2)
+    lr            : SGD learning rate
+    momentum      : SGD momentum
+    weight_decay  : L2 regularisation for SGD
+    mu            : FedProx proximal coefficient (0.01 is the paper default)
+    device        : 'cpu' or 'cuda'
+    class_weights : optional tensor of shape (num_classes,) for imbalanced data
+
+    Returns
+    -------
+    (last_epoch_loss, last_epoch_accuracy)
+    """
     model.to(device).train()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
+
+    # Weighted CrossEntropyLoss — handles class imbalance across splits
+    criterion = nn.CrossEntropyLoss(
+        weight=class_weights.to(device) if class_weights is not None else None
+    )
+
+    # SGD is preferred in FL: it does not maintain per-parameter momentum state
+    # across rounds (which would be stale after global aggregation), and its
+    # update direction is more predictable for convergence proofs.
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=lr,
+        momentum=momentum,
+        weight_decay=weight_decay,
+        nesterov=True,
+    )
+
+    # CosineAnnealingLR smoothly decays LR each epoch, avoiding abrupt drops
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=epochs, eta_min=lr * 0.01
+    )
+
+    # Build per-parameter global tensors aligned with model.parameters().
+    # global_params comes from state_dict() which includes BN buffers; we must
+    # select only the entries whose keys appear in named_parameters().
+    sd_keys    = list(model.state_dict().keys())
+    param_names = {name for name, _ in model.named_parameters()}
+    global_param_map = {
+        key: torch.tensor(global_params[i], dtype=torch.float32, device=device)
+        for i, key in enumerate(sd_keys)
+        if key in param_names
+    }
+    # ordered list matching model.parameters() iteration order
+    global_tensors = [
+        global_param_map[name]
+        for name, _ in model.named_parameters()
+    ]
 
     last_loss = last_acc = 0.0
-    for _ in range(epochs):
+
+    for _epoch in range(epochs):
         running_loss = correct = total = 0
+
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
-            outputs = model(images)
-            loss    = criterion(outputs, labels)
+
+            outputs = model(images)                    # raw logits
+            ce_loss = criterion(outputs, labels)
+
+            # --- FedProx proximal term ---
+            # Penalise deviation of local weights from the frozen global weights
+            prox = sum(
+                torch.sum((lw - gw) ** 2)
+                for lw, gw in zip(model.parameters(), global_tensors)
+            )
+            loss = ce_loss + (mu / 2.0) * prox
+
             loss.backward()
+            # Gradient clipping prevents exploding gradients on deep ResNet
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
-            running_loss += loss.item() * images.size(0)
+
+            running_loss += ce_loss.item() * images.size(0)  # log CE loss only
             _, preds = outputs.max(dim=1)
             correct  += preds.eq(labels).sum().item()
             total    += images.size(0)
+
         last_loss = running_loss / total
         last_acc  = correct / total
         scheduler.step()
@@ -98,33 +196,74 @@ def train_one_round(
     return last_loss, last_acc
 
 
+# Keep the old name so api.py / other callers don't break
+def train_one_round(
+    model: nn.Module,
+    loader: DataLoader,
+    epochs: int = 2,
+    lr: float = 0.01,
+    device: str = "cpu",
+    class_weights: Optional[torch.Tensor] = None,
+    global_params: Optional[List[np.ndarray]] = None,
+    mu: float = 0.01,
+) -> Tuple[float, float]:
+    """Thin wrapper — calls train_fedprox when global_params is provided,
+    otherwise falls back to plain SGD (no proximal term)."""
+    if global_params is None:
+        global_params = get_parameters(model)
+    return train_fedprox(
+        model, global_params, loader,
+        epochs=epochs, lr=lr, mu=mu,
+        device=device, class_weights=class_weights,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+
 def evaluate(
     model: nn.Module,
     loader: DataLoader,
     device: str = "cpu",
-) -> Tuple[float, float]:
+    num_classes: int = 6,
+) -> Tuple[float, float, Dict[int, float]]:
+    """
+    Evaluate model on a DataLoader.
+
+    Returns
+    -------
+    (loss, overall_accuracy, per_class_accuracy_dict)
+    per_class_accuracy_dict: {class_idx: accuracy_float}
+    """
     model.to(device).eval()
     criterion    = nn.CrossEntropyLoss()
-    running_loss = correct = total = 0
+    running_loss = 0.0
+    correct      = 0
+    total        = 0
+
+    # Track per-class correct / total
+    class_correct = [0] * num_classes
+    class_total   = [0] * num_classes
+
     with torch.no_grad():
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             loss    = criterion(outputs, labels)
+
             running_loss += loss.item() * images.size(0)
             _, preds = outputs.max(dim=1)
             correct  += preds.eq(labels).sum().item()
             total    += images.size(0)
-    return running_loss / total, correct / total
 
+            for label, pred in zip(labels.cpu(), preds.cpu()):
+                class_total[label.item()]   += 1
+                class_correct[label.item()] += int(pred.item() == label.item())
 
-def get_parameters(model: nn.Module) -> List[np.ndarray]:
-    return [val.cpu().numpy() for val in model.state_dict().values()]
-
-
-def set_parameters(model: nn.Module, parameters: List[np.ndarray]) -> None:
-    state_dict = OrderedDict(
-        {k: torch.tensor(v, dtype=model.state_dict()[k].dtype)
-         for k, v in zip(model.state_dict().keys(), parameters)}
-    )
-    model.load_state_dict(state_dict, strict=True)
+    overall_acc = correct / total if total > 0 else 0.0
+    per_class   = {
+        i: (class_correct[i] / class_total[i] if class_total[i] > 0 else 0.0)
+        for i in range(num_classes)
+    }
+    return running_loss / total, overall_acc, per_class

@@ -21,6 +21,7 @@ const API = {
   pdfReport: "/api/pdf-report",
   adminStats: "/api/admin/stats",
   adminFeedback: "/api/admin/feedback",
+  exportExcel: "/api/admin/export-excel",
 };
 
 const SCAN_MODES = {
@@ -433,6 +434,8 @@ function processFile(file) {
     hide("chartContainer");
     const uncPanel = $("uncertaintyPanel");
     if (uncPanel) uncPanel.style.display = "none";
+    const featPanel0 = $("featuresPanel");
+    if (featPanel0) featPanel0.style.display = "none";
     const icdBadge = $("icdBadge");
     if (icdBadge) icdBadge.style.display = "none";
     const gcHint = $("gradcamHint");
@@ -565,6 +568,9 @@ async function runPredict() {
     state.filename = data.filename || state.file.name;
     state.gradcamAvailable = !!data.gradcam_available;
     state.uncertainty = data.uncertainty || null;
+    state.selectedModeMass = data.selected_mode_mass || 0;
+    state.otherModeMass = data.other_mode_mass || 0;
+    state.scanTypeMismatch = !!(data.scan_type_mismatch);
 
     // Update preview meta
     const fmt = data.detected_format ? data.detected_format.toUpperCase() : "";
@@ -593,6 +599,7 @@ async function runPredict() {
     renderIcdBadge(data.mode_predicted_key);
     renderUncertainty(data.uncertainty);
     renderChart(data.probabilities);
+    renderFeaturesPanel(data.mode_predicted_key);
     renderOCR(data);
 
     // Doctor panel
@@ -628,6 +635,14 @@ async function runPredict() {
     } else {
       showToast(`Analysis complete: ${label} (${confPct}%)`, "success");
     }
+
+    // Enable report download buttons right after analysis
+    const dlBtnPost = $("downloadBtn");
+    if (dlBtnPost) dlBtnPost.disabled = false;
+    const pdfBtnPost = $("downloadPdfBtn");
+    if (pdfBtnPost) pdfBtnPost.disabled = false;
+    const xlBtnPost = $("downloadExcelBtn");
+    if (xlBtnPost) xlBtnPost.disabled = false;
 
     // Update title
     document.title = `Tecnomate | ${label}`;
@@ -1122,6 +1137,8 @@ async function submitFeedback() {
     if (dlBtn) dlBtn.disabled = false;
     const pdfBtn = $("downloadPdfBtn");
     if (pdfBtn) pdfBtn.disabled = false;
+    const xlBtn = $("downloadExcelBtn");
+    if (xlBtn) xlBtn.disabled = false;
 
     if (overridden) {
       state.overrideCount += 1;
@@ -1232,6 +1249,11 @@ async function downloadPdfReport() {
     // Model info
     form.append("fl_round", "0");
     form.append("model_version", "global_model.pth");
+
+    // AI mathematical parameters
+    form.append("selected_mode_mass", String(state.selectedModeMass || 0));
+    form.append("other_mode_mass", String(state.otherModeMass || 0));
+    form.append("scan_type_mismatch", state.scanTypeMismatch ? "true" : "false");
 
     const res = await fetch(API.pdfReport, { method: "POST", body: form });
 
@@ -1359,6 +1381,12 @@ function downloadReport() {
     ocrBlock,
     "",
     "--------------------------------------------------------",
+    "  CNN FEATURE ANALYSIS",
+    "  What the model extracted from this image",
+    "--------------------------------------------------------",
+    ...buildFeatureLines(),
+    "",
+    "--------------------------------------------------------",
     "  PRIVACY NOTICE",
     "  Patient data anonymized. EXIF/metadata stripped.",
     "  No patient-identifiable information retained.",
@@ -1385,6 +1413,51 @@ function downloadReport() {
   showToast("TXT report downloaded", "success", 2000);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   EXCEL EXPORT DOWNLOAD
+══════════════════════════════════════════════════════════════ */
+async function downloadExcelReport() {
+  const btn = $("downloadExcelBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Exporting…";
+  }
+  try {
+    const res = await fetch(API.exportExcel);
+    if (!res.ok) {
+      let detail = `Server error ${res.status}`;
+      try { const e = await res.json(); detail = e.detail || detail; } catch { /**/ }
+      throw new Error(detail);
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    const cd   = res.headers.get("Content-Disposition") || "";
+    const m    = cd.match(/filename="?([^"]+)"?/);
+    a.download = m ? m[1] : `tecnomate_export_${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Excel report downloaded", "success", 2500);
+  } catch (err) {
+    showToast(`Excel export failed: ${err.message}`, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.5">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="3" y1="9" x2="21" y2="9"/>
+        <line x1="3" y1="15" x2="21" y2="15"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+        <line x1="15" y1="3" x2="15" y2="21"/>
+      </svg> Excel Export`;
+    }
+  }
+}
+
 function buildProbLines() {
   if (!state.probabilities) return ["  No data"];
   const mode = SCAN_MODES[state.scanType];
@@ -1408,6 +1481,100 @@ function buildUncertaintyLines() {
     `  Std. Confidence   : ${unc.std_confidence.toFixed(4)}`,
     `  Uncertainty Level : ${unc.uncertainty_label}`,
   ];
+}
+
+const FEATURE_DETAIL = {
+  glioma: {
+    primary:         "Focal hyper/hypo-intense mass; irregular ill-defined boundary; heterogeneous signal (necrotic core); surrounding oedema; midline shift.",
+    texture:         "High-frequency edge irregularity at mass; abrupt intensity gradients at tumour-parenchyma interface; chaotic internal texture.",
+    spatial:         "Supratentorial (frontal/temporal lobe); unilateral mass effect; loss of adjacent gyral pattern.",
+    differentiates:  "Ill-defined margin & heterogeneous core vs meningioma; outside sella vs pituitary; any focal mass/oedema vs no-tumour.",
+  },
+  meningioma: {
+    primary:         "Well-circumscribed homogeneous extra-axial mass; smooth dural-based boundary; uniform density; dural tail sign.",
+    texture:         "Uniform internal texture; sharp peripheral edges; possible focal hypo-intense calcification spots.",
+    spatial:         "Dura/falx/tentorium origin; convexity or parasagittal; compression without parenchymal invasion.",
+    differentiates:  "Sharp well-defined boundary vs glioma; extra-sellar location vs pituitary; extra-axial mass vs no-tumour.",
+  },
+  notumor: {
+    primary:         "No focal mass, no abnormal signal, no boundary irregularity; symmetric grey-white distribution; preserved cortical folding.",
+    texture:         "Homogeneous intensity throughout both hemispheres; no abrupt local transitions; normal ventricle size/position.",
+    spatial:         "Bilateral symmetry; midline centred; no structural displacement; sulci and gyri clearly defined.",
+    differentiates:  "Complete absence of mass features (irregular edges, heterogeneous cores, extra-axial masses, sellar enlargement).",
+  },
+  pituitary: {
+    primary:         "Sellar/supra-sellar mass; expanded or eroded sella; variable signal (micro vs macro adenoma); possible optic chiasm compression.",
+    texture:         "Focal intensity variation in midline sellar region; subtle gland asymmetry (microadenoma); sellar floor depression (macroadenoma).",
+    spatial:         "Strictly midline centred on sella; inferior-to-chiasm extension; cavernous sinus invasion possible.",
+    differentiates:  "Strictly midline sellar location vs glioma/meningioma; sellar expansion or asymmetric signal vs no-tumour.",
+  },
+  pneumonia: {
+    primary:         "Pulmonary consolidation (opacification); air bronchogram sign; lobar/segmental/patchy distribution; possible pleural effusion.",
+    texture:         "High-intensity lung regions (normally dark aerated); loss of normal lung texture gradient; ill-defined consolidation margins.",
+    spatial:         "Unilateral or bilateral; lower-lobe predominance (bacterial); perihilar/diffuse (atypical/viral); heart border obliteration possible.",
+    differentiates:  "Focal/diffuse opacification replacing aerated lung vs normal; air bronchogram vs pleural effusion.",
+  },
+  normal: {
+    primary:         "Clear uniformly aerated lung fields; distinct costophrenic angles; sharp cardiac silhouette; visible pulmonary vasculature.",
+    texture:         "Low-intensity (dark) parenchyma with fine uniform vascular markings; sharp diaphragm-lung interface; no asymmetric density changes.",
+    spatial:         "Bilateral symmetric lung fields; no pleural thickening; no hilar enlargement; normal tracheal midline.",
+    differentiates:  "Complete absence of consolidation, opacification, or pleural fluid; all normal landmarks preserved bilaterally.",
+  },
+};
+
+/* ════════════════════════════════════════════════════════
+   FEATURES PANEL — dashboard render
+════════════════════════════════════════════════════════ */
+function renderFeaturesPanel(predKey) {
+  const panel = $("featuresPanel");
+  if (!panel) return;
+
+  const feat = FEATURE_DETAIL[predKey];
+  if (!feat) {
+    panel.style.display = "none";
+    return;
+  }
+
+  // Pipeline summary line
+  const pipelineEl = $("featPipeline");
+  if (pipelineEl) {
+    pipelineEl.textContent =
+      "→ Greyscale → CLAHE contrast enhancement → Resize 128×128 → Normalise " +
+      "→ Conv Block×3 (16→32→64 filters) → FC 1024 → Dropout → 6-class output";
+  }
+
+  const setText = (id, val) => { const el = $(id); if (el) el.textContent = val || "—"; };
+  setText("featPrimary", feat.primary);
+  setText("featTexture",  feat.texture);
+  setText("featSpatial",  feat.spatial);
+  setText("featDiff",     feat.differentiates);
+
+  panel.style.display = "block";
+}
+
+function buildFeatureLines() {
+  const pred = state.aiPredKey;
+  const feat = FEATURE_DETAIL[pred];
+  const lines = [
+    "  PREPROCESSING PIPELINE:",
+    "  Greyscale → CLAHE contrast enhancement → Resize 128x128 → Normalize",
+    "",
+    "  CNN EXTRACTION BLOCKS:",
+    "  Block 1 (Conv 1→16):  Low-level edges, intensity gradients, fine texture.",
+    "  Block 2 (Conv 16→32): Mid-level textures, shape outlines, boundary topology.",
+    "  Block 3 (Conv 32→64): High-level patterns — mass density, asymmetry, consolidation.",
+    "  FC 1024 → Dropout → FC 6: Final 6-class probability scores.",
+    "",
+  ];
+  if (feat) {
+    const label = SCAN_MODES[state.scanType]?.labels?.[pred] || pred;
+    lines.push(`  FEATURES DETECTED FOR: ${label}`);
+    lines.push(`  Primary Features   : ${feat.primary}`);
+    lines.push(`  Texture Signals    : ${feat.texture}`);
+    lines.push(`  Spatial Context    : ${feat.spatial}`);
+    lines.push(`  Differentiates By  : ${feat.differentiates}`);
+  }
+  return lines;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1582,6 +1749,8 @@ function clearAll() {
 
   const uncPanel = $("uncertaintyPanel");
   if (uncPanel) uncPanel.style.display = "none";
+  const featPanel1 = $("featuresPanel");
+  if (featPanel1) featPanel1.style.display = "none";
   const icdBadge = $("icdBadge");
   if (icdBadge) icdBadge.style.display = "none";
   const gcHint = $("gradcamHint");
@@ -1615,6 +1784,8 @@ function clearAll() {
   if (dlBtn) dlBtn.disabled = true;
   const pdfBtn = $("downloadPdfBtn");
   if (pdfBtn) pdfBtn.disabled = true;
+  const xlBtn2 = $("downloadExcelBtn");
+  if (xlBtn2) xlBtn2.disabled = true;
 
   hideOverrideBadge();
 

@@ -168,6 +168,11 @@ class ReportRequest:
     clinician_name: str = ""
     clinician_id: str = ""
 
+    # AI mathematical parameters (from predict response)
+    selected_mode_mass: float = 0.0   # probability mass in selected scan mode
+    other_mode_mass: float = 0.0      # probability mass in other scan mode
+    scan_type_mismatch: bool = False  # was a scan-type mismatch detected?
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  Grad-CAM
@@ -994,6 +999,358 @@ def _build_prob_section(S: dict, req: ReportRequest) -> List:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  AI Diagnostic Parameters section
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
+    """
+    Detailed table of every mathematical parameter the model produced,
+    so the clinician can see the full numerical basis of the decision.
+    """
+    import math as _math
+
+    probs = req.probabilities  # mode-filtered probs
+    pred_key = req.ai_pred_key
+
+    # ── derived metrics ────────────────────────────────────────────────────
+    sorted_vals = sorted(probs.values(), reverse=True)
+    margin = sorted_vals[0] - sorted_vals[1] if len(sorted_vals) >= 2 else 0.0
+
+    entropy = 0.0
+    for p in probs.values():
+        if p > 1e-9:
+            entropy -= p * _math.log2(p)
+
+    # runner-up class
+    sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+    runner_key  = sorted_items[1][0] if len(sorted_items) >= 2 else ""
+    runner_prob = sorted_items[1][1] if len(sorted_items) >= 2 else 0.0
+    runner_label = SHORT_NAMES.get(runner_key, runner_key)
+
+    # ── per-class probability rows ─────────────────────────────────────────
+    mode_cfg  = SCAN_MODE_CFG.get(req.scan_type, SCAN_MODE_CFG["Brain MRI"])
+    cls_labels = mode_cfg["labels"]
+
+    out = [*_section_heading("AI Diagnostic Mathematical Parameters", S)]
+
+    intro = (
+        "The following table records every numerical output the model produced "
+        "for this inference. These values form the complete mathematical basis "
+        "for the AI diagnosis and are saved to the audit log."
+    )
+    out.append(Paragraph(intro, S["body"]))
+    out.append(Spacer(1, 8))
+
+    # ── primary output parameters ──────────────────────────────────────────
+    risk = RISK_LEVEL.get(pred_key, "MEDIUM")
+    mismatch_str = (
+        f"YES — model assigned {req.other_mode_mass * 100:.1f}% mass to other scan type"
+        if req.scan_type_mismatch
+        else f"No  (selected-mode mass {req.selected_mode_mass * 100:.1f}%)"
+    )
+
+    primary_rows: List[Tuple[str, str]] = [
+        ("Predicted Class",        SHORT_NAMES.get(pred_key, pred_key)),
+        ("Softmax Confidence",     f"{req.ai_confidence * 100:.4f}%"),
+        ("Runner-Up Class",        f"{runner_label}  ({runner_prob * 100:.4f}%)"),
+        ("Prediction Margin",      f"{margin * 100:.4f}%  (gap between top-1 and top-2)"),
+        ("Shannon Entropy",        f"{entropy:.6f} bits  (lower = more certain)"),
+        ("Risk Level",             risk),
+        ("Selected-Mode Prob Mass",f"{req.selected_mode_mass * 100:.2f}%  ({req.scan_type})"),
+        ("Other-Mode Prob Mass",   f"{req.other_mode_mass * 100:.2f}%"),
+        ("Scan Type Mismatch",     mismatch_str),
+    ]
+    out.append(Paragraph("Inference Output", S["body_bold"]))
+    out.append(Spacer(1, 4))
+    out.append(_kv_table(primary_rows, S))
+    out.append(Spacer(1, 10))
+
+    # ── per-class probability table ────────────────────────────────────────
+    out.append(Paragraph("Per-Class Softmax Probabilities", S["body_bold"]))
+    out.append(Spacer(1, 4))
+
+    prob_data = [
+        [
+            Paragraph("Class", S["body_bold"]),
+            Paragraph("Probability", S["body_bold"]),
+            Paragraph("% Score", S["body_bold"]),
+            Paragraph("Relative Bar", S["body_bold"]),
+        ]
+    ]
+    for k in mode_cfg["keys"]:
+        p    = probs.get(k, 0.0)
+        lbl  = cls_labels.get(k, k)
+        pct  = p * 100
+        bar  = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+        is_pred = (k == pred_key)
+        row_style = ParagraphStyle(
+            "pb", fontSize=8,
+            textColor=_BRAND_BLUE if is_pred else _TEXT_BODY,
+            fontName="Helvetica-Bold" if is_pred else "Helvetica",
+        )
+        prob_data.append([
+            Paragraph(lbl + (" ✓" if is_pred else ""), row_style),
+            Paragraph(f"{p:.6f}", row_style),
+            Paragraph(f"{pct:.4f}%", row_style),
+            Paragraph(bar, ParagraphStyle("bar", fontSize=7,
+                         fontName="Courier", textColor=_BRAND_BLUE if is_pred else _TEXT_MUTED)),
+        ])
+
+    prob_tbl = Table(prob_data,
+                     colWidths=[5.5 * cm, 3.0 * cm, 2.5 * cm, 5.8 * cm],
+                     hAlign="LEFT", repeatRows=1)
+    prob_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), _WHITE),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, 0), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
+        ("GRID",  (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    out.append(prob_tbl)
+    out.append(Spacer(1, 10))
+
+    # ── MC-Dropout uncertainty (if used) ──────────────────────────────────
+    unc = req.uncertainty
+    if unc and unc.mc_samples > 0:
+        out.append(Paragraph("MC-Dropout Predictive Uncertainty", S["body_bold"]))
+        out.append(Spacer(1, 4))
+        unc_rows: List[Tuple[str, str]] = [
+            ("MC Samples Run",       str(unc.mc_samples)),
+            ("Mean Entropy",         f"{unc.mean_entropy:.6f}"),
+            ("Std. Confidence",      f"{unc.std_confidence:.6f}"),
+            ("Uncertainty Label",    unc.uncertainty_label or "N/A"),
+            ("Interpretation",
+             "Low uncertainty = model is consistently confident across MC runs; "
+             "High uncertainty = predictions vary — consider additional review."),
+        ]
+        out.append(_kv_table(unc_rows, S))
+
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CNN Feature Analysis section
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Per-class textual explanation of what visual patterns drive the prediction
+_CLASS_FEATURE_DETAIL: Dict[str, Dict[str, str]] = {
+    "glioma": {
+        "primary_features":
+            "Focal hyper-intense or hypo-intense mass region; irregular, ill-defined tumour "
+            "boundary; heterogeneous signal intensity indicating necrotic core; surrounding "
+            "oedema causing white-matter displacement; asymmetric midline shift.",
+        "texture_signals":
+            "High-frequency edge irregularity within the mass; abrupt intensity gradients at "
+            "the tumour-parenchyma interface; chaotic internal texture contrasting with "
+            "surrounding homogeneous grey matter.",
+        "spatial_context":
+            "Typically supratentorial, often frontal or temporal lobe; unilateral mass effect; "
+            "loss of normal gyral pattern adjacent to lesion.",
+        "differentiating_from_others":
+            "Distinguished from meningioma by ill-defined margin and heterogeneous core "
+            "(vs. well-defined homogeneous); from pituitary by location outside sella; "
+            "from no-tumour by presence of any focal mass or oedema.",
+    },
+    "meningioma": {
+        "primary_features":
+            "Well-circumscribed, homogeneous extra-axial mass; smooth, lobulated or dural-based "
+            "boundary; uniform signal density; dural tail sign; compression of adjacent brain "
+            "without invasion.",
+        "texture_signals":
+            "Uniform internal texture with sharp, well-defined edges; smooth intensity gradient "
+            "at periphery; possible calcification producing focal hypo-intense spots.",
+        "spatial_context":
+            "Arises from dura/falx/tentorium; convexity or parasagittal location common; "
+            "mass effect without parenchymal invasion.",
+        "differentiating_from_others":
+            "Distinguished from glioma by sharp, well-defined boundary and homogeneous interior; "
+            "from pituitary by extra-sellar location; from no-tumour by presence of an "
+            "extra-axial mass.",
+    },
+    "notumor": {
+        "primary_features":
+            "No focal mass, no abnormal signal region, no boundary irregularity; "
+            "symmetric grey-white matter distribution; preserved cortical folding pattern.",
+        "texture_signals":
+            "Uniform, homogeneous intensity distribution throughout both hemispheres; "
+            "no abrupt local intensity transitions; normal ventricle size and position.",
+        "spatial_context":
+            "Bilateral symmetry maintained; midline central; no displacement of normal "
+            "structures; sulci and gyri clearly defined.",
+        "differentiating_from_others":
+            "Absence of all focal mass features that define glioma, meningioma, or pituitary: "
+            "no irregular edges, no heterogeneous cores, no extra-axial masses, no sellar "
+            "enlargement.",
+    },
+    "pituitary": {
+        "primary_features":
+            "Sellar or supra-sellar mass; expansion or erosion of the sella turcica; "
+            "homogeneous or heterogeneous signal depending on microadenoma vs macroadenoma; "
+            "possible optic chiasm compression (upward bulge).",
+        "texture_signals":
+            "Focal intensity variation in the midline sellar region; subtle gland asymmetry "
+            "in microadenoma; marked sellar floor depression in macroadenoma.",
+        "spatial_context":
+            "Strictly midline, centred on the sella; inferior-to-chiasm extension; cavernous "
+            "sinus invasion possible in larger lesions.",
+        "differentiating_from_others":
+            "Distinguished from glioma and meningioma by strictly midline sellar location; "
+            "from no-tumour by sellar expansion or asymmetric gland signal.",
+    },
+    "pneumonia": {
+        "primary_features":
+            "Pulmonary consolidation — opacification replacing normal aerated lung; "
+            "air bronchogram sign (dark branching airways within white consolidation); "
+            "lobar, segmental, or patchy distribution; possible pleural effusion.",
+        "texture_signals":
+            "High-intensity (white) parenchymal regions where air should be low-intensity (dark); "
+            "loss of normal lung texture gradient; ill-defined consolidation margins blending "
+            "into surrounding lung.",
+        "spatial_context":
+            "Unilateral or bilateral; lower-lobe predominance for typical bacterial pneumonia; "
+            "perihilar or diffuse for atypical/viral; heart border obliteration if left-lower "
+            "lobe involved.",
+        "differentiating_from_others":
+            "Distinguished from normal by presence of focal or diffuse opacification replacing "
+            "aerated lung; distinguished from pleural effusion by air bronchogram; "
+            "no cardiac enlargement pattern as in pulmonary oedema.",
+    },
+    "normal": {
+        "primary_features":
+            "Clear, uniformly aerated lung fields; distinct costophrenic angles; "
+            "sharp cardiac silhouette; clearly visible pulmonary vasculature without "
+            "focal opacities or consolidation.",
+        "texture_signals":
+            "Low-intensity (dark) lung parenchyma with fine uniform vascular markings; "
+            "sharp diaphragm-lung interface; no asymmetric density changes.",
+        "spatial_context":
+            "Bilateral symmetric lung fields; no pleural thickening; no hilar enlargement; "
+            "normal tracheal midline position.",
+        "differentiating_from_others":
+            "Absence of any consolidation, opacification, or pleural fluid that characterise "
+            "pneumonia; all normal landmarks preserved bilaterally.",
+    },
+}
+
+# CNN block-by-block pipeline description
+_CNN_PIPELINE_ROWS = [
+    ("Pre-processing",
+     "Input image → Greyscale conversion → CLAHE contrast enhancement → "
+     "Resize to 128×128 → Pixel normalisation (mean 0.5, std 0.5)"),
+    ("Block 1 — Conv 1→16 (3×3, ReLU, MaxPool)",
+     "Detects low-level features: pixel intensity edges, boundary gradients, "
+     "localised brightness transitions, and fine-grain texture primitives."),
+    ("Block 2 — Conv 16→32 (3×3, ReLU, MaxPool)",
+     "Combines Block 1 features into mid-level representations: regional contrast "
+     "patterns, shape outlines, irregular boundary topology, and tissue-texture "
+     "signatures."),
+    ("Block 3 — Conv 32→64 (3×3, ReLU, MaxPool)",
+     "Extracts high-level semantic patterns: mass presence and density, bilateral "
+     "intensity asymmetry, consolidation regions, and global structural deformation "
+     "relative to normal anatomy."),
+    ("Flatten → FC 1024 → Dropout 0.5 → FC 6",
+     "Aggregates all spatial feature maps into a 1024-dimensional representation; "
+     "dropout regularisation prevents over-reliance on any single feature; "
+     "final layer outputs a calibrated probability score for each of the 6 classes."),
+    ("Output Classes",
+     "Glioma · Meningioma · No Tumour · Pituitary  [Brain MRI mode] | "
+     "Pneumonia · Normal  [Chest X-Ray mode]"),
+]
+
+
+def _build_feature_analysis_section(S: dict, req: ReportRequest) -> List:
+    """
+    Section explaining what image features the CNN extracted from this specific
+    scan and why it produced the prediction it did.
+    """
+    pred_key = req.ai_pred_key
+    feat = _CLASS_FEATURE_DETAIL.get(pred_key, {})
+
+    out = [*_section_heading(
+        "CNN Feature Analysis — What the Model Extracted from This Image", S
+    )]
+
+    # ── introductory paragraph ─────────────────────────────────────────────
+    intro = (
+        f"The following describes the visual features the convolutional neural network "
+        f"(MedicalCNN) identified in the uploaded scan when producing the prediction "
+        f"<b>{SHORT_NAMES.get(pred_key, pred_key)}</b>.  "
+        f"The model processes the image through three convolutional blocks, each "
+        f"progressively extracting higher-level patterns before making its final "
+        f"class decision."
+    )
+    out.append(Paragraph(intro, S["body"]))
+    out.append(Spacer(1, 8))
+
+    # ── CNN pipeline table ─────────────────────────────────────────────────
+    out.append(Paragraph("Image Processing & Feature Extraction Pipeline", S["body_bold"]))
+    out.append(Spacer(1, 4))
+
+    pipeline_data = [
+        [Paragraph("Stage", S["body_bold"]), Paragraph("What is extracted", S["body_bold"])]
+    ] + [
+        [Paragraph(stage, S["body_bold"]), Paragraph(desc, S["body"])]
+        for stage, desc in _CNN_PIPELINE_ROWS
+    ]
+
+    pipeline_tbl = Table(
+        pipeline_data,
+        colWidths=[5.2 * cm, 11.6 * cm],
+        hAlign="LEFT",
+        repeatRows=1,
+    )
+    pipeline_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), _WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
+        ("GRID", (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    out.append(pipeline_tbl)
+    out.append(Spacer(1, 10))
+
+    # ── predicted-class feature detail ────────────────────────────────────
+    if feat:
+        out.append(Paragraph(
+            f"Key Visual Features Detected for: {SHORT_NAMES.get(pred_key, pred_key)}",
+            S["body_bold"],
+        ))
+        out.append(Spacer(1, 4))
+
+        detail_rows = [
+            ("Primary Visual Features",   feat.get("primary_features", "—")),
+            ("Texture & Edge Signals",    feat.get("texture_signals", "—")),
+            ("Spatial Context",           feat.get("spatial_context", "—")),
+            ("How It Differs From Others",feat.get("differentiating_from_others", "—")),
+        ]
+        detail_tbl = _kv_table(detail_rows, S, col_widths=[4.5 * cm, 12.3 * cm])
+        out.append(detail_tbl)
+        out.append(Spacer(1, 8))
+
+    # ── note about Grad-CAM ────────────────────────────────────────────────
+    gradcam_note = (
+        "The Grad-CAM heatmap shown in the Scan Image section above highlights "
+        "the exact pixel regions that contributed most to this prediction — "
+        "brighter/warmer colours indicate higher importance to the model's decision."
+    )
+    out.append(Paragraph(gradcam_note, S["caption"]))
+
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Clinician review section
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1253,6 +1610,14 @@ def build_pdf_report(req: ReportRequest) -> bytes:
 
     # ── class probabilities chart ─────────────────────────────────────────────
     story.extend(_build_prob_section(S, req))
+    story.append(Spacer(1, 10))
+
+    # ── AI diagnostic mathematical parameters ────────────────────────────────
+    story.extend(_build_ai_params_section(S, req))
+    story.append(Spacer(1, 10))
+
+    # ── CNN feature analysis (what the model extracted from this image) ───────
+    story.append(KeepTogether(_build_feature_analysis_section(S, req)))
     story.append(Spacer(1, 10))
 
     # ── clinician review ──────────────────────────────────────────────────────

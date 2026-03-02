@@ -86,18 +86,28 @@ CREATE TABLE IF NOT EXISTS feedback (
 
 _CREATE_SESSIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS sessions (
-    session_id      TEXT    PRIMARY KEY,
-    filename        TEXT    DEFAULT '',
-    scan_type       TEXT    DEFAULT '',
-    ai_pred_key     TEXT    DEFAULT '',
-    ai_confidence   REAL    DEFAULT 0.0,
-    probabilities   TEXT    DEFAULT '{}',
-    ocr_text        TEXT    DEFAULT '',
-    file_size_bytes INTEGER DEFAULT 0,
-    image_width     INTEGER DEFAULT 0,
-    image_height    INTEGER DEFAULT 0,
-    detected_format TEXT    DEFAULT '',
-    created_at      TEXT    NOT NULL
+    session_id         TEXT    PRIMARY KEY,
+    filename           TEXT    DEFAULT '',
+    scan_type          TEXT    DEFAULT '',
+    ai_pred_key        TEXT    DEFAULT '',
+    ai_confidence      REAL    DEFAULT 0.0,
+    probabilities      TEXT    DEFAULT '{}',
+    all_probabilities  TEXT    DEFAULT '{}',
+    prediction_margin  REAL    DEFAULT 0.0,
+    shannon_entropy    REAL    DEFAULT 0.0,
+    mean_entropy       REAL    DEFAULT 0.0,
+    std_confidence     REAL    DEFAULT 0.0,
+    mc_samples         INTEGER DEFAULT 0,
+    uncertainty_label  TEXT    DEFAULT '',
+    selected_mode_mass REAL    DEFAULT 0.0,
+    other_mode_mass    REAL    DEFAULT 0.0,
+    scan_type_mismatch INTEGER DEFAULT 0,
+    ocr_text           TEXT    DEFAULT '',
+    file_size_bytes    INTEGER DEFAULT 0,
+    image_width        INTEGER DEFAULT 0,
+    image_height       INTEGER DEFAULT 0,
+    detected_format    TEXT    DEFAULT '',
+    created_at         TEXT    NOT NULL
 );
 """
 
@@ -159,7 +169,7 @@ class FeedbackDB:
     # ── lifecycle ──────────────────────────────────────────────────────────────
 
     def _bootstrap(self) -> None:
-        """Create tables and indexes if they do not yet exist."""
+        """Create tables/indexes and migrate existing DBs to add new columns."""
         with self._lock:
             cur = self._conn.cursor()
             cur.execute("BEGIN;")
@@ -170,6 +180,31 @@ class FeedbackDB:
             except Exception:
                 self._conn.rollback()
                 raise
+        # Migrate: add new columns to existing sessions tables that predate them
+        _NEW_SESSION_COLS = [
+            ("all_probabilities",  "TEXT    DEFAULT '{}'"),
+            ("prediction_margin",  "REAL    DEFAULT 0.0"),
+            ("shannon_entropy",    "REAL    DEFAULT 0.0"),
+            ("mean_entropy",       "REAL    DEFAULT 0.0"),
+            ("std_confidence",     "REAL    DEFAULT 0.0"),
+            ("mc_samples",         "INTEGER DEFAULT 0"),
+            ("uncertainty_label",  "TEXT    DEFAULT ''"),
+            ("selected_mode_mass", "REAL    DEFAULT 0.0"),
+            ("other_mode_mass",    "REAL    DEFAULT 0.0"),
+            ("scan_type_mismatch", "INTEGER DEFAULT 0"),
+        ]
+        with self._lock:
+            existing = {row[1] for row in self._conn.execute(
+                "PRAGMA table_info(sessions);"
+            )}
+            for col_name, col_def in _NEW_SESSION_COLS:
+                if col_name not in existing:
+                    try:
+                        self._conn.execute(
+                            f"ALTER TABLE sessions ADD COLUMN {col_name} {col_def};"
+                        )
+                    except Exception:
+                        pass  # already exists or DDL error — safe to ignore
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
@@ -195,14 +230,14 @@ class FeedbackDB:
     def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
         d = dict(row)
         # Deserialise JSON blobs
-        for key in ("probabilities",):
+        for key in ("probabilities", "all_probabilities"):
             if key in d and isinstance(d[key], str):
                 try:
                     d[key] = json.loads(d[key])
                 except (json.JSONDecodeError, TypeError):
                     d[key] = {}
         # Convert SQLite integer booleans back to Python booleans
-        for key in ("overridden",):
+        for key in ("overridden", "scan_type_mismatch"):
             if key in d:
                 d[key] = bool(d[key])
         return d
@@ -351,45 +386,75 @@ class FeedbackDB:
 
     def add_session(self, data: Dict[str, Any]) -> None:
         """
-        Insert (or replace) a prediction session record.
-
-        This is called immediately after a successful /api/predict response
-        so that the full prediction context can be retrieved when building
-        the PDF report.
+        Insert (or replace) a prediction session record including all
+        AI diagnostic mathematical parameters.
         """
+        import math
         sql = """
             INSERT OR REPLACE INTO sessions (
                 session_id, filename, scan_type, ai_pred_key,
-                ai_confidence, probabilities, ocr_text,
-                file_size_bytes, image_width, image_height,
+                ai_confidence, probabilities, all_probabilities,
+                prediction_margin, shannon_entropy,
+                mean_entropy, std_confidence, mc_samples, uncertainty_label,
+                selected_mode_mass, other_mode_mass, scan_type_mismatch,
+                ocr_text, file_size_bytes, image_width, image_height,
                 detected_format, created_at
             ) VALUES (
                 :session_id, :filename, :scan_type, :ai_pred_key,
-                :ai_confidence, :probabilities, :ocr_text,
-                :file_size_bytes, :image_width, :image_height,
+                :ai_confidence, :probabilities, :all_probabilities,
+                :prediction_margin, :shannon_entropy,
+                :mean_entropy, :std_confidence, :mc_samples, :uncertainty_label,
+                :selected_mode_mass, :other_mode_mass, :scan_type_mismatch,
+                :ocr_text, :file_size_bytes, :image_width, :image_height,
                 :detected_format, :created_at
             );
         """
         dims = data.get("image_dimensions", [0, 0])
+
+        # Mode-filtered probabilities (what's shown to user)
+        mode_probs: Dict[str, float] = data.get(
+            "mode_probabilities", data.get("probabilities", {})
+        )
+        # All 6-class probabilities
+        all_probs: Dict[str, float] = data.get("probabilities", mode_probs)
+
+        # Prediction margin: gap between top-1 and top-2 mode probabilities
+        sorted_vals = sorted(mode_probs.values(), reverse=True)
+        margin = round(sorted_vals[0] - sorted_vals[1], 6) if len(sorted_vals) >= 2 else 0.0
+
+        # Shannon entropy of the mode probability distribution
+        entropy = 0.0
+        for p in mode_probs.values():
+            if p > 1e-9:
+                entropy -= p * math.log2(p)
+        entropy = round(entropy, 6)
+
+        # MC-Dropout uncertainty (if MC was requested)
+        unc = data.get("uncertainty", {})
+
         record = {
-            "session_id": data.get("session_id", ""),
-            "filename": data.get("filename", ""),
-            "scan_type": data.get("scan_type", ""),
-            "ai_pred_key": data.get(
-                "mode_predicted_key", data.get("predicted_key", "")
-            ),
-            "ai_confidence": float(
-                data.get("mode_confidence", data.get("confidence", 0.0))
-            ),
-            "probabilities": json.dumps(
-                data.get("mode_probabilities", data.get("probabilities", {}))
-            ),
-            "ocr_text": data.get("ocr_text", ""),
-            "file_size_bytes": int(data.get("file_size_bytes", 0)),
-            "image_width": int(dims[0]) if len(dims) > 0 else 0,
-            "image_height": int(dims[1]) if len(dims) > 1 else 0,
-            "detected_format": data.get("detected_format", ""),
-            "created_at": self._now(),
+            "session_id":         data.get("session_id", ""),
+            "filename":           data.get("filename", ""),
+            "scan_type":          data.get("scan_type", ""),
+            "ai_pred_key":        data.get("mode_predicted_key", data.get("predicted_key", "")),
+            "ai_confidence":      float(data.get("mode_confidence", data.get("confidence", 0.0))),
+            "probabilities":      json.dumps(mode_probs),
+            "all_probabilities":  json.dumps(all_probs),
+            "prediction_margin":  margin,
+            "shannon_entropy":    entropy,
+            "mean_entropy":       float(unc.get("mean_entropy", 0.0)),
+            "std_confidence":     float(unc.get("std_confidence", 0.0)),
+            "mc_samples":         int(unc.get("mc_samples", 0)),
+            "uncertainty_label":  unc.get("uncertainty_label", ""),
+            "selected_mode_mass": float(data.get("selected_mode_mass", 0.0)),
+            "other_mode_mass":    float(data.get("other_mode_mass", 0.0)),
+            "scan_type_mismatch": int(bool(data.get("scan_type_mismatch", False))),
+            "ocr_text":           data.get("ocr_text", ""),
+            "file_size_bytes":    int(data.get("file_size_bytes", 0)),
+            "image_width":        int(dims[0]) if len(dims) > 0 else 0,
+            "image_height":       int(dims[1]) if len(dims) > 1 else 0,
+            "detected_format":    data.get("detected_format", ""),
+            "created_at":         self._now(),
         }
         with self._lock:
             cur = self._conn.cursor()

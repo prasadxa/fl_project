@@ -28,7 +28,7 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader
 import flwr as fl
 from flwr.client import start_client  # non-deprecated replacement for start_numpy_client
-from dataset import CLASS_NAMES, NUM_CLASSES, MedicalImageDataset, get_client_loader
+from dataset import CLASS_NAMES, NUM_CLASSES, MedicalImageDataset, compute_class_weights, get_client_loader
 from model import MedicalCNN, evaluate, get_parameters, set_parameters, train_one_round
 
 warnings.filterwarnings("ignore")
@@ -101,7 +101,7 @@ def _archive_new_images() -> int:
 
 class MedicalFLClient(fl.client.NumPyClient):
 
-    def __init__(self, client_id: int, batch_size: int = 16, local_epochs: int = 2):
+    def __init__(self, client_id: int, batch_size: int = 16, local_epochs: int = 10):
         self.client_id    = client_id
         self.local_epochs = local_epochs
         self.batch_size   = batch_size
@@ -122,7 +122,12 @@ class MedicalFLClient(fl.client.NumPyClient):
         # --- continual learning: merge any new doctor-verified images ---
         loader = _build_combined_loader(self.base_loader, self.batch_size)
 
-        loss, acc = train_one_round(self.model, loader, epochs=local_epochs, device=DEVICE)
+        loss, acc = train_one_round(
+            self.model, loader,
+            epochs=local_epochs,
+            device=DEVICE,
+            class_weights=compute_class_weights(loader),  # fix class imbalance
+        )
         print(f"[Client {self.client_id}] fit  -> loss={loss:.4f}  acc={acc:.4f}  "
               f"(samples={len(loader.dataset)})")
 

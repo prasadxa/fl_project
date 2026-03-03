@@ -11,6 +11,147 @@ import {
 // ── Browser-level upload validation constants ─────────────────────────────────
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
+// ── Canvas-based image colour analysis ───────────────────────────────────────
+/**
+ * Loads a File into an HTMLImageElement and draws it on an off-screen canvas,
+ * then samples every pixel to compute grayscale statistics.
+ *
+ * Returns a promise that resolves to:
+ *   { grayRatio, meanSat, highSatRatio, uniqueColors }
+ *
+ * grayRatio    — fraction of pixels where max(|R-G|,|R-B|,|G-B|) < 18
+ * meanSat      — average saturation (0–1) across all pixels
+ * highSatRatio — fraction of pixels with saturation > 0.20
+ * uniqueColors — number of unique quantised colours (÷16 per channel, 64×64)
+ */
+function analyseImageColour(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        // ── Full-size sample (128×128) for saturation stats ────────────────
+        const SIZE = 128;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+
+        let grayCount = 0;
+        let satSum = 0;
+        let highSatCount = 0;
+        const total = SIZE * SIZE;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          // Grayscale check
+          const maxDiff = Math.max(
+            Math.abs(r - g),
+            Math.abs(r - b),
+            Math.abs(g - b),
+          );
+          if (maxDiff < 18) grayCount++;
+
+          // HSL saturation
+          const rn = r / 255,
+            gn = g / 255,
+            bn = b / 255;
+          const max = Math.max(rn, gn, bn);
+          const min = Math.min(rn, gn, bn);
+          const l = (max + min) / 2;
+          const sat =
+            max === min
+              ? 0
+              : (max - min) / (l > 0.5 ? 2 - max - min : max + min);
+          satSum += sat;
+          if (sat > 0.2) highSatCount++;
+        }
+
+        const grayRatio = grayCount / total;
+        const meanSat = satSum / total;
+        const highSatRatio = highSatCount / total;
+
+        // ── Unique colour count (64×64) ────────────────────────────────────
+        const SMALL = 64;
+        const canvas2 = document.createElement("canvas");
+        canvas2.width = SMALL;
+        canvas2.height = SMALL;
+        const ctx2 = canvas2.getContext("2d");
+        ctx2.drawImage(img, 0, 0, SMALL, SMALL);
+        const { data: d2 } = ctx2.getImageData(0, 0, SMALL, SMALL);
+        const colorSet = new Set();
+        for (let i = 0; i < d2.length; i += 4) {
+          const key =
+            (d2[i] >> 4) * 65536 + (d2[i + 1] >> 4) * 256 + (d2[i + 2] >> 4);
+          colorSet.add(key);
+        }
+
+        resolve({
+          grayRatio,
+          meanSat,
+          highSatRatio,
+          uniqueColors: colorSet.size,
+        });
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not load image for colour analysis."));
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Returns a rejection reason string if the image is clearly non-medical
+ * (colourful, too many unique colours), or null if it looks plausibly
+ * grayscale enough to be a medical scan.
+ *
+ * Thresholds mirror the backend _is_likely_medical_scan() function.
+ */
+async function browserVisualCheck(file, scanType) {
+  // Skip check for DICOM — canvas cannot decode raw DICOM bytes
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "dcm") return null;
+
+  // Only enforce strict visual check for Chest X-Ray
+  if (!STRICT_OCR_SCAN_TYPES.includes(scanType)) return null;
+
+  let stats;
+  try {
+    stats = await analyseImageColour(file);
+  } catch {
+    // If analysis fails, let the server decide
+    return null;
+  }
+
+  const { grayRatio, meanSat, highSatRatio, uniqueColors } = stats;
+  const modality = scanType === "Chest X-Ray" ? "chest X-ray" : "brain MRI";
+
+  if (grayRatio < 0.7) {
+    return `This image appears to be a colour photograph, not a ${modality}. Real medical scans are grayscale. Please upload a valid ${modality} image.`;
+  }
+  if (meanSat > 0.15) {
+    return `This image has too much colour saturation to be a ${modality}. Please upload a grayscale medical image.`;
+  }
+  if (highSatRatio > 0.2) {
+    return `Too many colourful pixels detected for a ${modality}. Please upload a valid medical scan.`;
+  }
+  if (uniqueColors > 900) {
+    return `This image contains too many distinct colours to be a ${modality}. Medical scans are typically near-grayscale.`;
+  }
+
+  return null; // passes visual check
+}
+
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -62,7 +203,7 @@ function validateFile(f) {
     return "The selected file is empty. Please choose a valid image file.";
   }
 
-  return null; // valid
+  return null; // valid (basic checks — colour analysis is async, done in handleFile)
 }
 
 const SCAN_TYPES = ["Brain MRI", "Chest X-Ray"];
@@ -532,6 +673,7 @@ export default function Classify() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [visualCheckPending, setVisualCheckPending] = useState(false);
   // ocrRejected: { message, scanTypeDetected, errorCode, keywords }
   const [ocrRejected, setOcrRejected] = useState(null);
   // ocrStatus: 'idle' | 'checking' | 'pass' | 'fail'
@@ -546,36 +688,59 @@ export default function Classify() {
 
   const isStrictMode = STRICT_OCR_SCAN_TYPES.includes(scanType);
 
-  const handleFile = useCallback((f) => {
-    if (!f) return;
+  const handleFile = useCallback(
+    (f) => {
+      if (!f) return;
 
-    // ── Browser-level validation ───────────────────────────────────────────
-    const validationError = validateFile(f);
-    if (validationError) {
-      setError(validationError);
-      setFile(null);
-      setPreview(null);
+      // ── Step 1: Basic synchronous checks (type, size) ─────────────────────
+      const validationError = validateFile(f);
+      if (validationError) {
+        setError(validationError);
+        setFile(null);
+        setPreview(null);
+        setResult(null);
+        setOcrRejected(null);
+        setOcrStatus("idle");
+        setOcrPassKeywords([]);
+        setFbSent(false);
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+
+      // Show preview immediately so user sees what they selected
+      setFile(f);
+      setPreview(URL.createObjectURL(f));
       setResult(null);
+      setError(null);
       setOcrRejected(null);
       setOcrStatus("idle");
       setOcrPassKeywords([]);
       setFbSent(false);
-      // Reset the file input so the same file can be re-selected after fixing
-      if (inputRef.current) inputRef.current.value = "";
-      return;
-    }
 
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-    setResult(null);
-    setError(null);
-    setOcrRejected(null);
-    setOcrStatus("idle");
-    setOcrPassKeywords([]);
-    setFbSent(false);
-  }, []);
+      // ── Step 2: Async canvas-based colour analysis ─────────────────────────
+      // Run in background right after file selection — before the user clicks
+      // "Verify & Classify" — so we can show an error immediately.
+      setVisualCheckPending(true);
+      browserVisualCheck(f, scanType)
+        .then((colourError) => {
+          setVisualCheckPending(false);
+          if (colourError) {
+            setError(colourError);
+            setFile(null);
+            setPreview(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }
+        })
+        .catch(() => {
+          // Analysis failed — let server handle it, don't block the user
+          setVisualCheckPending(false);
+        });
+    },
+    [scanType],
+  );
 
-  // Reset OCR gate state when scan type switches
+  // Reset OCR gate state when scan type switches, and re-run visual check
+  // on the already-selected file since different modes have different rules.
   const handleScanTypeChange = (t) => {
     setScanType(t);
     setResult(null);
@@ -584,6 +749,24 @@ export default function Classify() {
     setOcrStatus("idle");
     setOcrPassKeywords([]);
     setFbSent(false);
+
+    // Re-validate the current file under the new scan type
+    if (file) {
+      setVisualCheckPending(true);
+      browserVisualCheck(file, t)
+        .then((colourError) => {
+          setVisualCheckPending(false);
+          if (colourError) {
+            setError(colourError);
+            setFile(null);
+            setPreview(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }
+        })
+        .catch(() => {
+          setVisualCheckPending(false);
+        });
+    }
   };
 
   const onDrop = useCallback(
@@ -597,6 +780,25 @@ export default function Classify() {
 
   const classify = async () => {
     if (!file) return;
+
+    // Guard: if canvas visual check is still running, wait for it first
+    if (visualCheckPending) {
+      setError(
+        "Image analysis in progress, please wait a moment and try again.",
+      );
+      return;
+    }
+
+    // Re-run visual check synchronously as a final gate before any network call
+    const colourError = await browserVisualCheck(file, scanType);
+    if (colourError) {
+      setError(colourError);
+      setFile(null);
+      setPreview(null);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setOcrRejected(null);
@@ -851,10 +1053,30 @@ export default function Classify() {
             </div>
             <button
               onClick={classify}
-              disabled={!file || loading}
+              disabled={!file || loading || visualCheckPending}
               className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
             >
-              {loading ? (
+              {visualCheckPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    />
+                  </svg>
+                  Analysing Image...
+                </span>
+              ) : loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle

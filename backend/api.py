@@ -1990,15 +1990,15 @@ def admin_export_excel():
     _hrow(ws2, 2, sess_cols)
 
     for i, row in enumerate(session_rows, start=3):
-        pred_key = row.get("ai_pred_key", "")
-        conf = row.get("ai_confidence", 0.0)
+        pred_key = row.get("ai_pred_key") or ""
+        conf = float(row.get("ai_confidence") or 0.0)
         vals = [
             row.get("session_id"),
             row.get("filename"),
             row.get("scan_type"),
             pred_key,
-            round(float(conf) * 100, 2) if conf else "N/A",
-            round(row.get("file_size_bytes", 0) / 1024, 1),
+            round(conf * 100, 2),
+            round((row.get("file_size_bytes") or 0) / 1024, 1),
             row.get("image_width"),
             row.get("image_height"),
             row.get("detected_format"),
@@ -2043,18 +2043,18 @@ def admin_export_excel():
     _hrow(ws3, 2, ai_cols)
 
     for i, row in enumerate(session_rows, start=3):
-        pred_key = row.get("ai_pred_key", "")
-        conf = float(row.get("ai_confidence", 0.0))
-        margin = float(row.get("prediction_margin", 0.0))
-        entropy = float(row.get("shannon_entropy", 0.0))
-        sel_mass = float(row.get("selected_mode_mass", 0.0))
-        oth_mass = float(row.get("other_mode_mass", 0.0))
-        mismatch = bool(row.get("scan_type_mismatch", False))
-        mc_ent = float(row.get("mean_entropy", 0.0))
-        mc_std = float(row.get("std_confidence", 0.0))
-        mc_n = int(row.get("mc_samples", 0))
-        unc_lbl = row.get("uncertainty_label", "")
-        all_p = row.get("all_probabilities", {})
+        pred_key = row.get("ai_pred_key") or ""
+        conf = float(row.get("ai_confidence") or 0.0)
+        margin = float(row.get("prediction_margin") or 0.0)
+        entropy = float(row.get("shannon_entropy") or 0.0)
+        sel_mass = float(row.get("selected_mode_mass") or 0.0)
+        oth_mass = float(row.get("other_mode_mass") or 0.0)
+        mismatch = bool(row.get("scan_type_mismatch") or False)
+        mc_ent = float(row.get("mean_entropy") or 0.0)
+        mc_std = float(row.get("std_confidence") or 0.0)
+        mc_n = int(row.get("mc_samples") or 0)
+        unc_lbl = row.get("uncertainty_label") or ""
+        all_p = row.get("all_probabilities") or {}
 
         vals = [
             row.get("session_id"),

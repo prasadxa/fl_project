@@ -68,7 +68,7 @@ _RED = colors.HexColor("#dc2626")
 _TEXT_MUTED = colors.HexColor("#64748b")
 _TEXT_BODY = colors.HexColor("#1e293b")
 _WHITE = colors.white
-_HEATMAP_ALPHA = 0.45  # overlay transparency when blending Grad-CAM
+_HEATMAP_ALPHA = 0.55  # overlay transparency when blending Grad-CAM
 
 # ── ICD-10 code map ───────────────────────────────────────────────────────────
 ICD10_MAP: Dict[str, Tuple[str, str]] = {
@@ -169,8 +169,8 @@ class ReportRequest:
     clinician_id: str = ""
 
     # AI mathematical parameters (from predict response)
-    selected_mode_mass: float = 0.0   # probability mass in selected scan mode
-    other_mode_mass: float = 0.0      # probability mass in other scan mode
+    selected_mode_mass: float = 0.0  # probability mass in selected scan mode
+    other_mode_mass: float = 0.0  # probability mass in other scan mode
     scan_type_mismatch: bool = False  # was a scan-type mismatch detected?
 
 
@@ -186,36 +186,67 @@ def compute_gradcam(
     original_pil: Image.Image,
 ) -> np.ndarray:
     """
-    Compute Grad-CAM for `target_class_idx` over the last conv layer
-    (`model.features[-1]`) and return an H×W×3 uint8 heatmap-on-image overlay.
+    Compute Grad-CAM for `target_class_idx` over the last conv layer of
+    MedicalCNN's ResNet18 backbone (layer4[-1].conv2) and return an
+    H×W×3 uint8 heatmap blended onto the original image.
+
+    Key implementation notes
+    ------------------------
+    - Hooks are placed on the *output* of the target layer using a plain
+      forward hook (captures activations) and a plain backward hook
+      (captures d_loss/d_activation — NOT d_loss/d_weight).
+    - requires_grad is set on the *input* tensor so the autograd graph is
+      built during the forward pass even in eval mode.
+    - torch.no_grad() must be OFF during the Grad-CAM forward pass so that
+      gradients can propagate; we restore no_grad after.
+    - GAP over the gradient map gives per-channel importance weights α_k.
+    - ReLU is applied to suppress negative contributions (standard Grad-CAM).
+    - The CAM is histogram-equalised before colouring so that the full
+      colour range is used even when the model is very confident (which
+      otherwise produces a nearly-flat, low-contrast gradient map).
+    - Colormap: COLORMAP_TURBO gives cleaner hot/cold separation than JET.
 
     Returns a zero-alpha blank (original image only) if anything fails.
     """
+    import cv2
     import torch
     import torch.nn.functional as F_nn
 
     try:
-        # Storage hooks
-        activations: List[torch.Tensor] = []
-        gradients: List[torch.Tensor] = []
+        # ── 1. locate the target layer (last conv in ResNet18 layer4) ─────────
+        # model is MedicalCNN; the ResNet18 body is model.model
+        target_layer = model.model.layer4[-1].conv2
 
-        def fwd_hook(module, inp, out):
-            activations.clear()
-            activations.append(out.detach())
+        # ── 2. storage for activations and gradients ──────────────────────────
+        # We capture the *output* tensor of the layer in the forward hook, and
+        # the gradient of the loss w.r.t. that same output in the backward hook.
+        # Using lists so the inner functions can rebind them.
+        _activations: List[torch.Tensor] = []
+        _gradients: List[torch.Tensor] = []
 
-        def bwd_hook(module, grad_in, grad_out):
-            gradients.clear()
-            gradients.append(grad_out[0].detach())
+        def _fwd_hook(_module, _inp, out):
+            # out: (1, C, H, W)  — keep on CPU, no detach yet so grad still flows
+            _activations.clear()
+            _activations.append(out)
 
-        # For MedicalCNN (ResNet18 backbone), the last conv is in layer4.
-        last_conv = model.model.layer4[-1].conv2
-        h1 = last_conv.register_forward_hook(fwd_hook)
-        h2 = last_conv.register_full_backward_hook(bwd_hook)
+        def _bwd_hook(_module, _grad_in, grad_out):
+            # grad_out[0]: (1, C, H, W) — gradient of score w.r.t. layer output
+            _gradients.clear()
+            _gradients.append(grad_out[0].detach())
 
+        h1 = target_layer.register_forward_hook(_fwd_hook)
+        h2 = target_layer.register_backward_hook(_bwd_hook)
+
+        # ── 3. forward pass with grad enabled ────────────────────────────────
+        # Must NOT be inside torch.no_grad() — we need the autograd graph.
         model.eval()
-        inp = tensor.clone().requires_grad_(True)
-        logits = model(inp)
+        # Ensure the input tensor is on the same device as the model
+        device = next(model.parameters()).device
+        inp = tensor.clone().to(device).requires_grad_(True)
 
+        logits = model(inp)  # (1, num_classes)
+
+        # ── 4. backward on the target class score ────────────────────────────
         model.zero_grad()
         score = logits[0, target_class_idx]
         score.backward()
@@ -223,45 +254,71 @@ def compute_gradcam(
         h1.remove()
         h2.remove()
 
-        act = activations[0].squeeze(0)  # (C, H, W)
-        grad = gradients[0].squeeze(0)  # (C, H, W)
+        if not _activations or not _gradients:
+            raise RuntimeError("Hooks did not fire — layer not found in forward graph.")
 
-        # Global average pool gradients → channel weights
+        # ── 5. compute Grad-CAM weights ───────────────────────────────────────
+        act = _activations[0].detach().squeeze(0)  # (C, H_f, W_f)
+        grad = _gradients[0].squeeze(0)  # (C, H_f, W_f)
+
+        # Global Average Pool over spatial dims → per-channel importance α_k
         weights = grad.mean(dim=(1, 2))  # (C,)
-        cam = torch.zeros(act.shape[1:], dtype=torch.float32)
-        for i, w in enumerate(weights):
-            cam += w * act[i]
 
+        # Weighted sum of activation maps
+        cam = torch.einsum("c,chw->hw", weights, act)  # (H_f, W_f)
+
+        # ReLU — keep only positive contributions to the target class
         cam = F_nn.relu(cam)
-        cam -= cam.min()
-        if cam.max() > 0:
-            cam /= cam.max()
-        cam_np = cam.numpy()
 
-        # Resize cam to original image size
-        import cv2
+        cam_np = cam.cpu().numpy().astype(np.float32)  # (H_f, W_f)
 
-        orig_w, orig_h = original_pil.size
-        cam_resized = cv2.resize(
-            cam_np, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR
+        # ── 6. upsample to original image size ───────────────────────────────
+        orig_w, orig_h = original_pil.size  # PIL: (width, height)
+        cam_resized: np.ndarray = np.array(
+            cv2.resize(cam_np, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC),
+            dtype=np.float32,
         )
 
-        # Colourmap (jet) → RGB uint8
+        # ── 7. normalise with histogram equalisation ─────────────────────────
+        # Simple min-max can collapse to near-zero when the model is very
+        # confident (flat gradients).  Percentile clipping + equalisation
+        # stretches the contrast so the heatmap always shows meaningful
+        # spatial variation.
+        lo = float(np.percentile(cam_resized, 5))
+        hi = float(np.percentile(cam_resized, 99))
+        if hi > lo:
+            cam_resized = np.clip((cam_resized - lo) / (hi - lo), 0.0, 1.0)
+        else:
+            # Completely flat CAM — fall back to original image only
+            print("[Grad-CAM] Warning: flat activation map — no spatial signal.")
+            return np.array(original_pil.convert("RGB"), dtype=np.uint8)
+
         cam_uint8 = (cam_resized * 255).astype(np.uint8)
-        heatmap_bgr = cv2.applyColorMap(cam_uint8, cv2.COLORMAP_JET)
+
+        # Apply CLAHE to the CAM for local contrast enhancement
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        cam_uint8 = clahe.apply(cam_uint8)
+
+        # ── 8. apply colourmap and blend ──────────────────────────────────────
+        # TURBO gives cleaner hot/cold bands than JET; easier for clinicians
+        # to read.  Falls back to JET if TURBO is not available (older OpenCV).
+        colormap = getattr(cv2, "COLORMAP_TURBO", cv2.COLORMAP_JET)
+        heatmap_bgr = cv2.applyColorMap(cam_uint8, colormap)
         heatmap_rgb = cv2.cvtColor(heatmap_bgr, cv2.COLOR_BGR2RGB)
 
-        # Blend with original image (convert to RGB first)
         orig_rgb = np.array(original_pil.convert("RGB"), dtype=np.uint8)
-        # Resize heatmap to match if sizes differ (safety)
+
+        # Safety: ensure sizes match after all the resizing
         if heatmap_rgb.shape[:2] != orig_rgb.shape[:2]:
             heatmap_rgb = cv2.resize(
-                heatmap_rgb, (orig_rgb.shape[1], orig_rgb.shape[0])
+                heatmap_rgb,
+                (orig_rgb.shape[1], orig_rgb.shape[0]),
+                interpolation=cv2.INTER_LINEAR,
             )
 
         overlay = (
             (
-                (1 - _HEATMAP_ALPHA) * orig_rgb.astype(np.float32)
+                (1.0 - _HEATMAP_ALPHA) * orig_rgb.astype(np.float32)
                 + _HEATMAP_ALPHA * heatmap_rgb.astype(np.float32)
             )
             .clip(0, 255)
@@ -271,8 +328,7 @@ def compute_gradcam(
         return overlay
 
     except Exception as exc:
-        print(f"[Grad-CAM] Warning: {exc}  — skipping heatmap.")
-        # Fallback: return the original image as RGB array
+        print(f"[Grad-CAM] Warning: {exc}  — returning original image.")
         try:
             return np.array(original_pil.convert("RGB"), dtype=np.uint8)
         except Exception:
@@ -1025,12 +1081,12 @@ def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
 
     # runner-up class
     sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-    runner_key  = sorted_items[1][0] if len(sorted_items) >= 2 else ""
+    runner_key = sorted_items[1][0] if len(sorted_items) >= 2 else ""
     runner_prob = sorted_items[1][1] if len(sorted_items) >= 2 else 0.0
     runner_label = SHORT_NAMES.get(runner_key, runner_key)
 
     # ── per-class probability rows ─────────────────────────────────────────
-    mode_cfg  = SCAN_MODE_CFG.get(req.scan_type, SCAN_MODE_CFG["Brain MRI"])
+    mode_cfg = SCAN_MODE_CFG.get(req.scan_type, SCAN_MODE_CFG["Brain MRI"])
     cls_labels = mode_cfg["labels"]
 
     out = [*_section_heading("AI Diagnostic Mathematical Parameters", S)]
@@ -1052,15 +1108,18 @@ def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
     )
 
     primary_rows: List[Tuple[str, str]] = [
-        ("Predicted Class",        SHORT_NAMES.get(pred_key, pred_key)),
-        ("Softmax Confidence",     f"{req.ai_confidence * 100:.4f}%"),
-        ("Runner-Up Class",        f"{runner_label}  ({runner_prob * 100:.4f}%)"),
-        ("Prediction Margin",      f"{margin * 100:.4f}%  (gap between top-1 and top-2)"),
-        ("Shannon Entropy",        f"{entropy:.6f} bits  (lower = more certain)"),
-        ("Risk Level",             risk),
-        ("Selected-Mode Prob Mass",f"{req.selected_mode_mass * 100:.2f}%  ({req.scan_type})"),
-        ("Other-Mode Prob Mass",   f"{req.other_mode_mass * 100:.2f}%"),
-        ("Scan Type Mismatch",     mismatch_str),
+        ("Predicted Class", SHORT_NAMES.get(pred_key, pred_key)),
+        ("Softmax Confidence", f"{req.ai_confidence * 100:.4f}%"),
+        ("Runner-Up Class", f"{runner_label}  ({runner_prob * 100:.4f}%)"),
+        ("Prediction Margin", f"{margin * 100:.4f}%  (gap between top-1 and top-2)"),
+        ("Shannon Entropy", f"{entropy:.6f} bits  (lower = more certain)"),
+        ("Risk Level", risk),
+        (
+            "Selected-Mode Prob Mass",
+            f"{req.selected_mode_mass * 100:.2f}%  ({req.scan_type})",
+        ),
+        ("Other-Mode Prob Mass", f"{req.other_mode_mass * 100:.2f}%"),
+        ("Scan Type Mismatch", mismatch_str),
     ]
     out.append(Paragraph("Inference Output", S["body_bold"]))
     out.append(Spacer(1, 4))
@@ -1080,39 +1139,56 @@ def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
         ]
     ]
     for k in mode_cfg["keys"]:
-        p    = probs.get(k, 0.0)
-        lbl  = cls_labels.get(k, k)
-        pct  = p * 100
-        bar  = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
-        is_pred = (k == pred_key)
+        p = probs.get(k, 0.0)
+        lbl = cls_labels.get(k, k)
+        pct = p * 100
+        bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+        is_pred = k == pred_key
         row_style = ParagraphStyle(
-            "pb", fontSize=8,
+            "pb",
+            fontSize=8,
             textColor=_BRAND_BLUE if is_pred else _TEXT_BODY,
             fontName="Helvetica-Bold" if is_pred else "Helvetica",
         )
-        prob_data.append([
-            Paragraph(lbl + (" ✓" if is_pred else ""), row_style),
-            Paragraph(f"{p:.6f}", row_style),
-            Paragraph(f"{pct:.4f}%", row_style),
-            Paragraph(bar, ParagraphStyle("bar", fontSize=7,
-                         fontName="Courier", textColor=_BRAND_BLUE if is_pred else _TEXT_MUTED)),
-        ])
+        prob_data.append(
+            [
+                Paragraph(lbl + (" ✓" if is_pred else ""), row_style),
+                Paragraph(f"{p:.6f}", row_style),
+                Paragraph(f"{pct:.4f}%", row_style),
+                Paragraph(
+                    bar,
+                    ParagraphStyle(
+                        "bar",
+                        fontSize=7,
+                        fontName="Courier",
+                        textColor=_BRAND_BLUE if is_pred else _TEXT_MUTED,
+                    ),
+                ),
+            ]
+        )
 
-    prob_tbl = Table(prob_data,
-                     colWidths=[5.5 * cm, 3.0 * cm, 2.5 * cm, 5.8 * cm],
-                     hAlign="LEFT", repeatRows=1)
-    prob_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
-        ("TEXTCOLOR",  (0, 0), (-1, 0), _WHITE),
-        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",   (0, 0), (-1, 0), 8),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
-        ("GRID",  (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
+    prob_tbl = Table(
+        prob_data,
+        colWidths=[5.5 * cm, 3.0 * cm, 2.5 * cm, 5.8 * cm],
+        hAlign="LEFT",
+        repeatRows=1,
+    )
+    prob_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
+                ("TEXTCOLOR", (0, 0), (-1, 0), _WHITE),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
+                ("GRID", (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
     out.append(prob_tbl)
     out.append(Spacer(1, 10))
 
@@ -1122,13 +1198,15 @@ def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
         out.append(Paragraph("MC-Dropout Predictive Uncertainty", S["body_bold"]))
         out.append(Spacer(1, 4))
         unc_rows: List[Tuple[str, str]] = [
-            ("MC Samples Run",       str(unc.mc_samples)),
-            ("Mean Entropy",         f"{unc.mean_entropy:.6f}"),
-            ("Std. Confidence",      f"{unc.std_confidence:.6f}"),
-            ("Uncertainty Label",    unc.uncertainty_label or "N/A"),
-            ("Interpretation",
-             "Low uncertainty = model is consistently confident across MC runs; "
-             "High uncertainty = predictions vary — consider additional review."),
+            ("MC Samples Run", str(unc.mc_samples)),
+            ("Mean Entropy", f"{unc.mean_entropy:.6f}"),
+            ("Std. Confidence", f"{unc.std_confidence:.6f}"),
+            ("Uncertainty Label", unc.uncertainty_label or "N/A"),
+            (
+                "Interpretation",
+                "Low uncertainty = model is consistently confident across MC runs; "
+                "High uncertainty = predictions vary — consider additional review.",
+            ),
         ]
         out.append(_kv_table(unc_rows, S))
 
@@ -1142,126 +1220,114 @@ def _build_ai_params_section(S: dict, req: ReportRequest) -> List:
 # Per-class textual explanation of what visual patterns drive the prediction
 _CLASS_FEATURE_DETAIL: Dict[str, Dict[str, str]] = {
     "glioma": {
-        "primary_features":
-            "Focal hyper-intense or hypo-intense mass region; irregular, ill-defined tumour "
-            "boundary; heterogeneous signal intensity indicating necrotic core; surrounding "
-            "oedema causing white-matter displacement; asymmetric midline shift.",
-        "texture_signals":
-            "High-frequency edge irregularity within the mass; abrupt intensity gradients at "
-            "the tumour-parenchyma interface; chaotic internal texture contrasting with "
-            "surrounding homogeneous grey matter.",
-        "spatial_context":
-            "Typically supratentorial, often frontal or temporal lobe; unilateral mass effect; "
-            "loss of normal gyral pattern adjacent to lesion.",
-        "differentiating_from_others":
-            "Distinguished from meningioma by ill-defined margin and heterogeneous core "
-            "(vs. well-defined homogeneous); from pituitary by location outside sella; "
-            "from no-tumour by presence of any focal mass or oedema.",
+        "primary_features": "Focal hyper-intense or hypo-intense mass region; irregular, ill-defined tumour "
+        "boundary; heterogeneous signal intensity indicating necrotic core; surrounding "
+        "oedema causing white-matter displacement; asymmetric midline shift.",
+        "texture_signals": "High-frequency edge irregularity within the mass; abrupt intensity gradients at "
+        "the tumour-parenchyma interface; chaotic internal texture contrasting with "
+        "surrounding homogeneous grey matter.",
+        "spatial_context": "Typically supratentorial, often frontal or temporal lobe; unilateral mass effect; "
+        "loss of normal gyral pattern adjacent to lesion.",
+        "differentiating_from_others": "Distinguished from meningioma by ill-defined margin and heterogeneous core "
+        "(vs. well-defined homogeneous); from pituitary by location outside sella; "
+        "from no-tumour by presence of any focal mass or oedema.",
     },
     "meningioma": {
-        "primary_features":
-            "Well-circumscribed, homogeneous extra-axial mass; smooth, lobulated or dural-based "
-            "boundary; uniform signal density; dural tail sign; compression of adjacent brain "
-            "without invasion.",
-        "texture_signals":
-            "Uniform internal texture with sharp, well-defined edges; smooth intensity gradient "
-            "at periphery; possible calcification producing focal hypo-intense spots.",
-        "spatial_context":
-            "Arises from dura/falx/tentorium; convexity or parasagittal location common; "
-            "mass effect without parenchymal invasion.",
-        "differentiating_from_others":
-            "Distinguished from glioma by sharp, well-defined boundary and homogeneous interior; "
-            "from pituitary by extra-sellar location; from no-tumour by presence of an "
-            "extra-axial mass.",
+        "primary_features": "Well-circumscribed, homogeneous extra-axial mass; smooth, lobulated or dural-based "
+        "boundary; uniform signal density; dural tail sign; compression of adjacent brain "
+        "without invasion.",
+        "texture_signals": "Uniform internal texture with sharp, well-defined edges; smooth intensity gradient "
+        "at periphery; possible calcification producing focal hypo-intense spots.",
+        "spatial_context": "Arises from dura/falx/tentorium; convexity or parasagittal location common; "
+        "mass effect without parenchymal invasion.",
+        "differentiating_from_others": "Distinguished from glioma by sharp, well-defined boundary and homogeneous interior; "
+        "from pituitary by extra-sellar location; from no-tumour by presence of an "
+        "extra-axial mass.",
     },
     "notumor": {
-        "primary_features":
-            "No focal mass, no abnormal signal region, no boundary irregularity; "
-            "symmetric grey-white matter distribution; preserved cortical folding pattern.",
-        "texture_signals":
-            "Uniform, homogeneous intensity distribution throughout both hemispheres; "
-            "no abrupt local intensity transitions; normal ventricle size and position.",
-        "spatial_context":
-            "Bilateral symmetry maintained; midline central; no displacement of normal "
-            "structures; sulci and gyri clearly defined.",
-        "differentiating_from_others":
-            "Absence of all focal mass features that define glioma, meningioma, or pituitary: "
-            "no irregular edges, no heterogeneous cores, no extra-axial masses, no sellar "
-            "enlargement.",
+        "primary_features": "No focal mass, no abnormal signal region, no boundary irregularity; "
+        "symmetric grey-white matter distribution; preserved cortical folding pattern.",
+        "texture_signals": "Uniform, homogeneous intensity distribution throughout both hemispheres; "
+        "no abrupt local intensity transitions; normal ventricle size and position.",
+        "spatial_context": "Bilateral symmetry maintained; midline central; no displacement of normal "
+        "structures; sulci and gyri clearly defined.",
+        "differentiating_from_others": "Absence of all focal mass features that define glioma, meningioma, or pituitary: "
+        "no irregular edges, no heterogeneous cores, no extra-axial masses, no sellar "
+        "enlargement.",
     },
     "pituitary": {
-        "primary_features":
-            "Sellar or supra-sellar mass; expansion or erosion of the sella turcica; "
-            "homogeneous or heterogeneous signal depending on microadenoma vs macroadenoma; "
-            "possible optic chiasm compression (upward bulge).",
-        "texture_signals":
-            "Focal intensity variation in the midline sellar region; subtle gland asymmetry "
-            "in microadenoma; marked sellar floor depression in macroadenoma.",
-        "spatial_context":
-            "Strictly midline, centred on the sella; inferior-to-chiasm extension; cavernous "
-            "sinus invasion possible in larger lesions.",
-        "differentiating_from_others":
-            "Distinguished from glioma and meningioma by strictly midline sellar location; "
-            "from no-tumour by sellar expansion or asymmetric gland signal.",
+        "primary_features": "Sellar or supra-sellar mass; expansion or erosion of the sella turcica; "
+        "homogeneous or heterogeneous signal depending on microadenoma vs macroadenoma; "
+        "possible optic chiasm compression (upward bulge).",
+        "texture_signals": "Focal intensity variation in the midline sellar region; subtle gland asymmetry "
+        "in microadenoma; marked sellar floor depression in macroadenoma.",
+        "spatial_context": "Strictly midline, centred on the sella; inferior-to-chiasm extension; cavernous "
+        "sinus invasion possible in larger lesions.",
+        "differentiating_from_others": "Distinguished from glioma and meningioma by strictly midline sellar location; "
+        "from no-tumour by sellar expansion or asymmetric gland signal.",
     },
     "pneumonia": {
-        "primary_features":
-            "Pulmonary consolidation — opacification replacing normal aerated lung; "
-            "air bronchogram sign (dark branching airways within white consolidation); "
-            "lobar, segmental, or patchy distribution; possible pleural effusion.",
-        "texture_signals":
-            "High-intensity (white) parenchymal regions where air should be low-intensity (dark); "
-            "loss of normal lung texture gradient; ill-defined consolidation margins blending "
-            "into surrounding lung.",
-        "spatial_context":
-            "Unilateral or bilateral; lower-lobe predominance for typical bacterial pneumonia; "
-            "perihilar or diffuse for atypical/viral; heart border obliteration if left-lower "
-            "lobe involved.",
-        "differentiating_from_others":
-            "Distinguished from normal by presence of focal or diffuse opacification replacing "
-            "aerated lung; distinguished from pleural effusion by air bronchogram; "
-            "no cardiac enlargement pattern as in pulmonary oedema.",
+        "primary_features": "Pulmonary consolidation — opacification replacing normal aerated lung; "
+        "air bronchogram sign (dark branching airways within white consolidation); "
+        "lobar, segmental, or patchy distribution; possible pleural effusion.",
+        "texture_signals": "High-intensity (white) parenchymal regions where air should be low-intensity (dark); "
+        "loss of normal lung texture gradient; ill-defined consolidation margins blending "
+        "into surrounding lung.",
+        "spatial_context": "Unilateral or bilateral; lower-lobe predominance for typical bacterial pneumonia; "
+        "perihilar or diffuse for atypical/viral; heart border obliteration if left-lower "
+        "lobe involved.",
+        "differentiating_from_others": "Distinguished from normal by presence of focal or diffuse opacification replacing "
+        "aerated lung; distinguished from pleural effusion by air bronchogram; "
+        "no cardiac enlargement pattern as in pulmonary oedema.",
     },
     "normal": {
-        "primary_features":
-            "Clear, uniformly aerated lung fields; distinct costophrenic angles; "
-            "sharp cardiac silhouette; clearly visible pulmonary vasculature without "
-            "focal opacities or consolidation.",
-        "texture_signals":
-            "Low-intensity (dark) lung parenchyma with fine uniform vascular markings; "
-            "sharp diaphragm-lung interface; no asymmetric density changes.",
-        "spatial_context":
-            "Bilateral symmetric lung fields; no pleural thickening; no hilar enlargement; "
-            "normal tracheal midline position.",
-        "differentiating_from_others":
-            "Absence of any consolidation, opacification, or pleural fluid that characterise "
-            "pneumonia; all normal landmarks preserved bilaterally.",
+        "primary_features": "Clear, uniformly aerated lung fields; distinct costophrenic angles; "
+        "sharp cardiac silhouette; clearly visible pulmonary vasculature without "
+        "focal opacities or consolidation.",
+        "texture_signals": "Low-intensity (dark) lung parenchyma with fine uniform vascular markings; "
+        "sharp diaphragm-lung interface; no asymmetric density changes.",
+        "spatial_context": "Bilateral symmetric lung fields; no pleural thickening; no hilar enlargement; "
+        "normal tracheal midline position.",
+        "differentiating_from_others": "Absence of any consolidation, opacification, or pleural fluid that characterise "
+        "pneumonia; all normal landmarks preserved bilaterally.",
     },
 }
 
 # CNN block-by-block pipeline description
 _CNN_PIPELINE_ROWS = [
-    ("Pre-processing",
-     "Input image → Greyscale conversion → CLAHE contrast enhancement → "
-     "Resize to 128×128 → Pixel normalisation (mean 0.5, std 0.5)"),
-    ("Block 1 — Conv 1→16 (3×3, ReLU, MaxPool)",
-     "Detects low-level features: pixel intensity edges, boundary gradients, "
-     "localised brightness transitions, and fine-grain texture primitives."),
-    ("Block 2 — Conv 16→32 (3×3, ReLU, MaxPool)",
-     "Combines Block 1 features into mid-level representations: regional contrast "
-     "patterns, shape outlines, irregular boundary topology, and tissue-texture "
-     "signatures."),
-    ("Block 3 — Conv 32→64 (3×3, ReLU, MaxPool)",
-     "Extracts high-level semantic patterns: mass presence and density, bilateral "
-     "intensity asymmetry, consolidation regions, and global structural deformation "
-     "relative to normal anatomy."),
-    ("Flatten → FC 1024 → Dropout 0.5 → FC 6",
-     "Aggregates all spatial feature maps into a 1024-dimensional representation; "
-     "dropout regularisation prevents over-reliance on any single feature; "
-     "final layer outputs a calibrated probability score for each of the 6 classes."),
-    ("Output Classes",
-     "Glioma · Meningioma · No Tumour · Pituitary  [Brain MRI mode] | "
-     "Pneumonia · Normal  [Chest X-Ray mode]"),
+    (
+        "Pre-processing",
+        "Input image → Greyscale conversion → CLAHE contrast enhancement → "
+        "Resize to 128×128 → Pixel normalisation (mean 0.5, std 0.5)",
+    ),
+    (
+        "Block 1 — Conv 1→16 (3×3, ReLU, MaxPool)",
+        "Detects low-level features: pixel intensity edges, boundary gradients, "
+        "localised brightness transitions, and fine-grain texture primitives.",
+    ),
+    (
+        "Block 2 — Conv 16→32 (3×3, ReLU, MaxPool)",
+        "Combines Block 1 features into mid-level representations: regional contrast "
+        "patterns, shape outlines, irregular boundary topology, and tissue-texture "
+        "signatures.",
+    ),
+    (
+        "Block 3 — Conv 32→64 (3×3, ReLU, MaxPool)",
+        "Extracts high-level semantic patterns: mass presence and density, bilateral "
+        "intensity asymmetry, consolidation regions, and global structural deformation "
+        "relative to normal anatomy.",
+    ),
+    (
+        "Flatten → FC 1024 → Dropout 0.5 → FC 6",
+        "Aggregates all spatial feature maps into a 1024-dimensional representation; "
+        "dropout regularisation prevents over-reliance on any single feature; "
+        "final layer outputs a calibrated probability score for each of the 6 classes.",
+    ),
+    (
+        "Output Classes",
+        "Glioma · Meningioma · No Tumour · Pituitary  [Brain MRI mode] | "
+        "Pneumonia · Normal  [Chest X-Ray mode]",
+    ),
 ]
 
 
@@ -1273,9 +1339,11 @@ def _build_feature_analysis_section(S: dict, req: ReportRequest) -> List:
     pred_key = req.ai_pred_key
     feat = _CLASS_FEATURE_DETAIL.get(pred_key, {})
 
-    out = [*_section_heading(
-        "CNN Feature Analysis — What the Model Extracted from This Image", S
-    )]
+    out = [
+        *_section_heading(
+            "CNN Feature Analysis — What the Model Extracted from This Image", S
+        )
+    ]
 
     # ── introductory paragraph ─────────────────────────────────────────────
     intro = (
@@ -1290,11 +1358,16 @@ def _build_feature_analysis_section(S: dict, req: ReportRequest) -> List:
     out.append(Spacer(1, 8))
 
     # ── CNN pipeline table ─────────────────────────────────────────────────
-    out.append(Paragraph("Image Processing & Feature Extraction Pipeline", S["body_bold"]))
+    out.append(
+        Paragraph("Image Processing & Feature Extraction Pipeline", S["body_bold"])
+    )
     out.append(Spacer(1, 4))
 
     pipeline_data = [
-        [Paragraph("Stage", S["body_bold"]), Paragraph("What is extracted", S["body_bold"])]
+        [
+            Paragraph("Stage", S["body_bold"]),
+            Paragraph("What is extracted", S["body_bold"]),
+        ]
     ] + [
         [Paragraph(stage, S["body_bold"]), Paragraph(desc, S["body"])]
         for stage, desc in _CNN_PIPELINE_ROWS
@@ -1306,35 +1379,44 @@ def _build_feature_analysis_section(S: dict, req: ReportRequest) -> List:
         hAlign="LEFT",
         repeatRows=1,
     )
-    pipeline_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
-        ("TEXTCOLOR", (0, 0), (-1, 0), _WHITE),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
-        ("GRID", (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
+    pipeline_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
+                ("TEXTCOLOR", (0, 0), (-1, 0), _WHITE),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_BRAND_LIGHT, _WHITE]),
+                ("GRID", (0, 0), (-1, -1), 0.3, _BRAND_BORDER),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
     out.append(pipeline_tbl)
     out.append(Spacer(1, 10))
 
     # ── predicted-class feature detail ────────────────────────────────────
     if feat:
-        out.append(Paragraph(
-            f"Key Visual Features Detected for: {SHORT_NAMES.get(pred_key, pred_key)}",
-            S["body_bold"],
-        ))
+        out.append(
+            Paragraph(
+                f"Key Visual Features Detected for: {SHORT_NAMES.get(pred_key, pred_key)}",
+                S["body_bold"],
+            )
+        )
         out.append(Spacer(1, 4))
 
         detail_rows = [
-            ("Primary Visual Features",   feat.get("primary_features", "—")),
-            ("Texture & Edge Signals",    feat.get("texture_signals", "—")),
-            ("Spatial Context",           feat.get("spatial_context", "—")),
-            ("How It Differs From Others",feat.get("differentiating_from_others", "—")),
+            ("Primary Visual Features", feat.get("primary_features", "—")),
+            ("Texture & Edge Signals", feat.get("texture_signals", "—")),
+            ("Spatial Context", feat.get("spatial_context", "—")),
+            (
+                "How It Differs From Others",
+                feat.get("differentiating_from_others", "—"),
+            ),
         ]
         detail_tbl = _kv_table(detail_rows, S, col_widths=[4.5 * cm, 12.3 * cm])
         out.append(detail_tbl)

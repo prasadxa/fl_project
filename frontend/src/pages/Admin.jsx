@@ -54,12 +54,12 @@ export default function Admin() {
       )}
 
       {/* Class Distribution */}
-      {stats?.class_distribution && (
+      {stats?.feedback_by_class && (
         <div className="glass rounded-2xl p-6 mb-8 fade-in">
           <h2 className="text-sm font-bold text-stone-600 mb-4">Class Distribution</h2>
           <div className="space-y-2">
-            {Object.entries(stats.class_distribution).map(([cls, cnt]) => {
-              const total = Object.values(stats.class_distribution).reduce((a, b) => a + b, 0)
+            {Object.entries(stats.feedback_by_class).map(([cls, cnt]) => {
+              const total = Object.values(stats.feedback_by_class).reduce((a, b) => a + b, 0)
               const pct = total > 0 ? (cnt / total * 100) : 0
               return (
                 <div key={cls} className="flex items-center gap-3">

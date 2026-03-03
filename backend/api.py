@@ -41,7 +41,7 @@ Supported image formats  : JPEG, PNG, WebP, BMP, TIFF, GIF, AVIF, HEIC/HEIF
 Maximum upload size      : 30 MB
 
 Run:
-    uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
+    uvicorn backend.api:app --reload --host 0.0.0.0 --port 8000
 """
 
 from __future__ import annotations
@@ -85,7 +85,6 @@ import torch.nn.functional as F
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
-from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -232,13 +231,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=()"
         )
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        # Basic CSP — allows same-origin scripts/styles only
+        # Only disable caching for API responses; let hashed static assets cache normally
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        # CSP: allow Google Fonts (Inter typeface) and same-origin resources
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: blob:; "
             "connect-src 'self'"
         )
@@ -332,12 +334,32 @@ def get_model() -> Optional[MedicalCNN]:
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    import asyncio
     get_model()
     # Initialise the DB singleton so the file is created at startup.
     get_db()
     print(f"[API] OCR available: {is_ocr_available()}")
     if not is_ocr_available():
         print(f"[API] OCR reason  : {ocr_unavailable_reason()}")
+
+    # Background task: clean up temp files older than 1 hour (runs every 5 min)
+    async def _cleanup_temp_files() -> None:
+        while True:
+            await asyncio.sleep(300)
+            try:
+                cutoff = time.time() - 3600  # 1 hour
+                for f in list(TEMP_DIR.iterdir()):
+                    try:
+                        if f.is_file() and f.stat().st_mtime < cutoff:
+                            f.unlink(missing_ok=True)
+                            if "_gradcam" not in f.name:
+                                _pending_images.pop(f.stem, None)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+    asyncio.create_task(_cleanup_temp_files())
 
 
 # ── image preprocessing ────────────────────────────────────────────────────────
@@ -1538,12 +1560,8 @@ async def feedback(
     except Exception as exc:
         print(f"[API] DB feedback save failed: {exc}")
 
-    # clean up temp scan (keep Grad-CAM temp until PDF is generated or timeout)
-    try:
-        tmp_path.unlink(missing_ok=True)
-        _pending_images.pop(session_id, None)
-    except Exception:
-        pass
+    # Keep temp file alive so the clinician can still download a PDF report
+    # after submitting feedback.  Background cleanup handles eviction after 1h.
 
     return {
         "success": True,

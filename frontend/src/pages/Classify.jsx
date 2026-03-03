@@ -608,22 +608,17 @@ export default function Classify() {
       try {
         const checkResult = await ocrCheck(file, scanType);
         if (!checkResult.allowed) {
-          // Balanced behavior: do not block on OCR inconclusive.
-          // Allow inference to proceed when no X-ray markers are found.
-          if (checkResult.error_code === OCR_ERROR_CODES.XRAY_UNCONFIRMED) {
-            setOcrStatus("pass");
-            setOcrPassKeywords([]);
-          } else {
-            setOcrStatus("fail");
-            setOcrRejected({
-              message: checkResult.message,
-              scanTypeDetected: checkResult.scan_type_detected || "unknown",
-              errorCode: checkResult.error_code,
-              keywords: checkResult.keywords_found || [],
-            });
-            setLoading(false);
-            return;
-          }
+          // Strict mode: reject all non-allowed results including unconfirmed X-rays.
+          // Random images without X-ray markers should not pass through.
+          setOcrStatus("fail");
+          setOcrRejected({
+            message: checkResult.message,
+            scanTypeDetected: checkResult.scan_type_detected || "unknown",
+            errorCode: checkResult.error_code,
+            keywords: checkResult.keywords_found || [],
+          });
+          setLoading(false);
+          return;
         } else {
           setOcrStatus("pass");
           setOcrPassKeywords(checkResult.keywords_found || []);

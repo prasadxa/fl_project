@@ -877,11 +877,9 @@ async def ocr_check(
                 "error_code": "OCR_SCAN_REJECTED",
             }
         else:
-            # OCR inconclusive — apply visual grayscale check as second gate.
-            # Clean clinical X-rays are fully grayscale and always pass.
-            # Colourful non-medical images (product photos, perfume bottles,
-            # food, selfies) with plain white backgrounds are caught here even
-            # though the whole-image gray ratio looks high.
+            # OCR inconclusive — STRICT MODE: reject unless we can positively
+            # confirm this is an X-ray. Random grayscale images should not pass.
+            # Only images with X-ray markers (is_xray=True) are allowed through.
             if not _is_likely_medical_scan(pil_img):
                 return {
                     "allowed": False,
@@ -897,17 +895,21 @@ async def ocr_check(
                     ),
                     "error_code": "OCR_SCAN_REJECTED",
                 }
+            # Even if grayscale, reject when OCR cannot confirm X-ray markers.
+            # This prevents random grayscale images from passing through.
             return {
-                "allowed": True,
+                "allowed": False,
                 "is_xray": None,
                 "scan_type_detected": "unknown",
                 "confidence": 0.0,
                 "keywords_found": [],
                 "message": (
-                    "OCR could not confirm X-ray markers but image appears grayscale. "
-                    "Proceeding; results may be less reliable for unannotated images."
+                    "Cannot verify this image as a chest X-ray. "
+                    "No X-ray markers were detected. Please upload a clinical "
+                    "chest X-ray image with standard radiographic annotations, "
+                    "or ensure the image is from a medical imaging source."
                 ),
-                "error_code": "",
+                "error_code": "OCR_XRAY_UNCONFIRMED",
             }
     else:
         # Brain MRI — visual check first (catches perfume bottles, product photos,
@@ -1122,14 +1124,29 @@ async def predict(
             )
 
         else:
-            # Balanced mode: OCR inconclusive should not block valid clean X-rays.
-            _audit_logger.info(
-                "OCR_GATE_INCONCLUSIVE_ALLOW ip=%s file=%s ocr_ran=%s",
+            # STRICT MODE: OCR inconclusive means we cannot confirm this is an X-ray.
+            # Reject to prevent random images from passing through.
+            _audit_logger.warning(
+                "OCR_GATE_INCONCLUSIVE_REJECT ip=%s file=%s ocr_ran=%s",
                 _client_ip,
                 image.filename or "unknown",
                 _xray_check.ocr_ran,
             )
-            _ocr_scan_validation["inconclusive_allowed"] = True
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": (
+                        "Cannot verify this image as a chest X-ray. "
+                        "No X-ray markers were detected. Please upload a clinical "
+                        "chest X-ray image with standard radiographic annotations, "
+                        "or ensure the image is from a medical imaging source."
+                    ),
+                    "error_code": "OCR_XRAY_UNCONFIRMED",
+                    "scan_type_detected": "unknown",
+                    "keywords_found": [],
+                    "ocr_confidence": 0.0,
+                },
+            )
 
     else:
         # ── PERMISSIVE (Brain MRI and any future modality) ────────────────────

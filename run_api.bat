@@ -9,9 +9,10 @@ REM ============================================================
 cd /d "%~dp0"
 
 set PROJECT_ROOT=%~dp0
-set PYTHON=C:/Users/karan/AppData/Local/Programs/Python/Python314/python.exe
+set PYTHON=python
 set HOST=127.0.0.1
 set PORT=8000
+set PYTHONPATH=%~dp0
 set PYTHONIOENCODING=utf-8
 
 echo.
@@ -63,7 +64,7 @@ echo  [4/4] Opening browser in 3 seconds...
 start "" /B cmd /c "timeout /t 3 /nobreak >nul && start http://%HOST%:%PORT%"
 
 REM ── Run uvicorn (blocking — stays in foreground) ─────────────
-%PYTHON% -m uvicorn src.api:app --host %HOST% --port %PORT% --reload
+%PYTHON% -m uvicorn backend.api:app --host %HOST% --port %PORT% --reload
 
 echo.
 echo  Server stopped.

@@ -836,6 +836,25 @@ async def ocr_check(
         raise HTTPException(status_code=400, detail=f"Could not decode image: {exc}")
 
     if scan_type == "Chest X-Ray":
+        # ── VISUAL CHECK FIRST: reject colorful images immediately ────────────
+        # This catches strawberries, product photos, selfies etc. BEFORE OCR runs.
+        # Even if OCR finds X-ray keywords in random text, colorful images are rejected.
+        if not _is_likely_medical_scan(pil_img):
+            return {
+                "allowed": False,
+                "is_xray": False,
+                "scan_type_detected": "non_medical",
+                "confidence": 0.90,
+                "keywords_found": [],
+                "message": (
+                    "This image does not appear to be a chest X-ray. "
+                    "Real chest X-rays are grayscale — this image contains "
+                    "colour content inconsistent with radiographic imaging. "
+                    "Please upload an original chest X-ray (JPEG / PNG / DICOM)."
+                ),
+                "error_code": "OCR_SCAN_REJECTED",
+            }
+
         if not is_ocr_available():
             return {
                 "allowed": False,
@@ -854,6 +873,7 @@ async def ocr_check(
         check = is_xray_scan(pil_img)
 
         if check.is_xray is True:
+            # Image passed visual check AND OCR confirmed X-ray markers
             return {
                 "allowed": True,
                 "is_xray": True,
@@ -880,23 +900,8 @@ async def ocr_check(
             # OCR inconclusive — STRICT MODE: reject unless we can positively
             # confirm this is an X-ray. Random grayscale images should not pass.
             # Only images with X-ray markers (is_xray=True) are allowed through.
-            if not _is_likely_medical_scan(pil_img):
-                return {
-                    "allowed": False,
-                    "is_xray": False,
-                    "scan_type_detected": "non_medical",
-                    "confidence": 0.85,
-                    "keywords_found": [],
-                    "message": (
-                        "This image does not appear to be a chest X-ray. "
-                        "Real chest X-rays are grayscale — this image contains "
-                        "colour content inconsistent with radiographic imaging. "
-                        "Please upload an original chest X-ray (JPEG / PNG / DICOM)."
-                    ),
-                    "error_code": "OCR_SCAN_REJECTED",
-                }
-            # Even if grayscale, reject when OCR cannot confirm X-ray markers.
-            # This prevents random grayscale images from passing through.
+            # Note: visual check already passed above, so image is grayscale.
+            # Even so, reject when OCR cannot confirm X-ray markers.
             return {
                 "allowed": False,
                 "is_xray": None,
@@ -1055,6 +1060,31 @@ async def predict(
     _client_ip = request.client.host if request.client else "unknown"
 
     if scan_type == "Chest X-Ray":
+        # ── VISUAL CHECK FIRST: reject colorful images immediately ────────────
+        # This catches strawberries, product photos, selfies etc. BEFORE OCR runs.
+        # Even if OCR finds X-ray keywords in random text, colorful images are rejected.
+        if not medical_plausible:
+            _audit_logger.warning(
+                "VISUAL_CHECK_REJECT ip=%s file=%s reason=colorful_image",
+                _client_ip,
+                image.filename or "unknown",
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": (
+                        "This image does not appear to be a chest X-ray. "
+                        "Real chest X-rays are grayscale — this image contains "
+                        "colour content inconsistent with radiographic imaging. "
+                        "Please upload an original chest X-ray (JPEG / PNG / DICOM)."
+                    ),
+                    "error_code": "OCR_SCAN_REJECTED",
+                    "scan_type_detected": "non_medical",
+                    "keywords_found": [],
+                    "ocr_confidence": 0.0,
+                },
+            )
+
         # ── STRICT: OCR engine must be available ──────────────────────────────
         if not is_ocr_available():
             _audit_logger.warning(

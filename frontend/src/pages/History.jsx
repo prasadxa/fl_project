@@ -50,20 +50,20 @@ export default function History() {
                 {sessions.map((s, i) => (
                   <tr key={s.session_id || i} className="hover:bg-teal-50/30 transition-colors">
                     <td className="px-5 py-3 text-stone-500 whitespace-nowrap">
-                      {s.timestamp ? new Date(s.timestamp).toLocaleString() : '—'}
+                      {s.created_at ? new Date(s.created_at).toLocaleString() : '—'}
                     </td>
                     <td className="px-5 py-3">
                       <span className="font-semibold text-stone-700">
-                        {s.predicted_class || s.short_name || '—'}
+                        {s.ai_pred_key || '—'}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      {s.confidence != null ? (
+                      {s.ai_confidence != null ? (
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-teal-500 rounded-full" style={{ width: `${(s.confidence * 100)}%` }} />
+                            <div className="h-full bg-teal-500 rounded-full" style={{ width: `${(s.ai_confidence * 100)}%` }} />
                           </div>
-                          <span className="text-xs font-medium text-stone-500">{(s.confidence * 100).toFixed(1)}%</span>
+                          <span className="text-xs font-medium text-stone-500">{(s.ai_confidence * 100).toFixed(1)}%</span>
                         </div>
                       ) : '—'}
                     </td>

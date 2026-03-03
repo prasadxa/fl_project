@@ -4,10 +4,10 @@ A privacy-preserving, continuously-learning federated learning (FL) system using
 
 The system ships a **React + Vite** web dashboard backed by **FastAPI**, plus a legacy Streamlit UI for FL-edge workflows.
 
-| Interface | Stack | Launch |
+| Interface | Stack | URL |
 |---|---|---|
-| **Web Dashboard** *(primary)* | FastAPI + React/Vite SPA | see [Option A](#option-a--web-dashboard-recommended) → `http://127.0.0.1:8000` |
-| **Streamlit UI** *(legacy)* | Streamlit | see [Option B](#option-b--full-fl-edge-system--streamlit-ui) → `http://localhost:8501` |
+| **Web Dashboard** *(primary)* | FastAPI + React/Vite SPA | `http://127.0.0.1:8000` |
+| **Streamlit UI** *(legacy)* | Streamlit | `http://localhost:8501` |
 
 Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, a layered upload-validation gate (ScanGate ML + visual heuristics + OCR), and a continual learning pipeline that incorporates new doctor-verified images into the next federated training round.
 
@@ -18,8 +18,8 @@ Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, a la
 | Property | Value |
 |---|---|
 | **Task** | 6-class medical image classification |
-| **FL Framework** | Flower (flwr) 1.26.1 |
-| **Deep Learning** | PyTorch ≥ 2.7.0 |
+| **FL Framework** | Flower (flwr) |
+| **Deep Learning** | PyTorch ≥ 2.5 |
 | **Algorithm** | FedAvg (Federated Averaging) |
 | **Clients** | 3 simulated FL clients |
 | **Rounds** | 5 initial FL rounds + continuation rounds via `train_sim.py` |
@@ -32,13 +32,13 @@ Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, a la
 
 ### 1. Brain Tumor MRI Classification
 - **Source**: Kaggle — Brain Tumor MRI Dataset
-- **Folder**: `data/raw/brain_tumer_classification/`
+- **Folder**: `DataSet/brain_tumer_train/` and `DataSet/brain_tumer_testing/`
 - **Classes**: Glioma, Meningioma, No Tumor, Pituitary
 - **Images**: ~7,200
 
 ### 2. Pneumonia Chest X-Ray Classification
 - **Source**: Kaggle — Chest X-Ray Images (Pneumonia)
-- **Folder**: `data/raw/pneomonia_classification/`
+- **Folder**: `DataSet/pneumonia_train/` and `DataSet/pneumonia_testing/`
 - **Classes**: Normal, Pneumonia
 - **Images**: ~5,856
 
@@ -88,21 +88,19 @@ fl_project/
 │   ├── latex_report.py                 # PDF report (ReportLab)
 │   └── utils.py                        # Shared utilities
 │
+├── DataSet/
+│   ├── brain_tumer_train/
+│   │   ├── Train_1/{glioma,meningioma,notumor,pituitary}/
+│   │   └── Train_2/{glioma,meningioma,notumor,pituitary}/
+│   ├── brain_tumer_testing/
+│   │   ├── Test_1/{glioma,meningioma,notumor,pituitary}/
+│   │   └── Test_2/{glioma,meningioma,notumor,pituitary}/
+│   ├── pneumonia_train/{NORMAL,PNEUMONIA}/
+│   ├── pneumonia_testing/{NORMAL,PNEUMONIA}/
+│   └── scraped_extra/{glioma,meningioma,normal,pituitary,pneumonia}/
+│
 ├── data/
-│   ├── raw/
-│   │   ├── brain_tumer_classification/
-│   │   │   └── Training/Testing/{glioma,meningioma,notumor,pituitary}/
-│   │   └── pneomonia_classification/
-│   │       └── train/val/test/{NORMAL,PNEUMONIA}/
-│   ├── partitions/
-│   │   ├── client_1/                   # ~3,698 images (6 class subfolders)
-│   │   ├── client_2/                   # ~3,699 images (6 class subfolders)
-│   │   ├── client_3/                   # ~3,700 images (6 class subfolders)
-│   │   └── global_test/                # ~1,959 images (held-out evaluation set)
-│   ├── gate_data/
-│   │   ├── ct_scan/                    # Optional CT images for ScanGate training
-│   │   └── non_medical/                # Optional extra non-medical images
-│   ├── cifar10_cache/                  # Auto-downloaded by train_gate.py
+│   ├── all_images/{glioma,meningioma,notumor,pituitary}/
 │   ├── new_collected_data/             # Doctor-verified images → next FL round
 │   │   └── {glioma,meningioma,notumor,pituitary,normal,pneumonia}/
 │   ├── archived_data/                  # Processed images moved here after FL round
@@ -110,9 +108,8 @@ fl_project/
 │
 ├── models/
 │   ├── global_model.pth                # Latest aggregated global model (MedicalCNN)
-│   ├── global_model_round_N_<ts>.pth   # Timestamped checkpoint per round
-│   ├── scan_gate.pth                   # ★ ScanGate EfficientNet-B0 weights
-│   └── confusion_matrix.png            # Confusion matrix heatmap
+│   ├── global_model_round_N.pth        # Checkpoint per round
+│   └── scan_gate.pth                   # ScanGate EfficientNet-B0 weights
 │
 ├── logs/
 │   ├── server.log
@@ -459,7 +456,7 @@ pip install -r requirements.txt
 cd frontend && npm install && npm run build && cd ..
 
 # 4. Start the backend (serves the app at http://127.0.0.1:8000)
-PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=. PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 #### Windows (PowerShell)
@@ -470,14 +467,18 @@ git clone https://github.com/prasadxa/fl_project
 cd fl_project
 
 # 2. Install Python dependencies
+#    Python 3.11+:
 pip install -r requirements.txt
+#    Python 3.10 (relaxed bounds):
+# pip install torch torchvision opencv-python Pillow numpy "scikit-learn>=1.5" "pandas>=2.0" openpyxl matplotlib seaborn rapidocr-onnxruntime fastapi "uvicorn[standard]" python-multipart reportlab
 
 # 3. Install and build the frontend
 cd frontend; npm install; npm run build; cd ..
 
 # 4. Start the backend (serves the app at http://127.0.0.1:8000)
+$env:PYTHONPATH = $PWD
 $env:PYTHONIOENCODING = 'utf-8'
-uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Then open **http://127.0.0.1:8000** in your browser. That's it — no retraining needed, model weights are included in the repo.
@@ -495,7 +496,7 @@ Run the backend and frontend in two separate terminals for live UI editing:
 ```bash
 # Terminal 1 — Backend (API)
 cd fl_project
-PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=. PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 
 # Terminal 2 — Frontend (Vite dev server with hot-reload)
 cd fl_project/frontend
@@ -507,8 +508,9 @@ npm run dev
 ```powershell
 # Terminal 1 — Backend (API)
 cd fl_project
+$env:PYTHONPATH = $PWD
 $env:PYTHONIOENCODING = 'utf-8'
-uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 
 # Terminal 2 — Frontend (Vite dev server with hot-reload)
 cd fl_project/frontend
@@ -525,30 +527,27 @@ npm run dev
 
 ### Prerequisites
 
-- **Python** ≥ 3.10
-- **Node.js** ≥ 18 (for the React frontend)
-- Datasets downloaded from Kaggle into `data/raw/` (see [Datasets](#datasets))
+- **Python** 3.10 or 3.11 (3.12+ not tested)
+- **Node.js** ≥ 18 and **npm** ≥ 9 (for the React frontend)
+- Pre-trained model weights are included in `models/` — no retraining needed to run the dashboard
+
+> **Python 3.10 note:** `requirements.txt` pins `scikit-learn>=1.8.0` which requires Python ≥3.11. On Python 3.10 use the relaxed install command shown in [Step 0](#step-0--install-python-dependencies).
 
 ---
 
 ### Step 0 — Install Python Dependencies
 
+**Python 3.11+:**
 ```bash
 pip install -r requirements.txt
 ```
 
-Install individually (if you prefer):
-
+**Python 3.10** (relaxed version bounds — `scikit-learn>=1.8` requires Python ≥3.11):
 ```bash
-pip install torch torchvision fastapi "uvicorn[standard]" python-multipart \
-    opencv-python Pillow numpy scikit-learn pandas openpyxl \
-    matplotlib seaborn reportlab flwr streamlit
-```
-
-Optional — enable OCR:
-
-```bash
-pip install rapidocr-onnxruntime
+pip install torch torchvision opencv-python Pillow numpy \
+    "scikit-learn>=1.5" "pandas>=2.0" openpyxl \
+    matplotlib seaborn rapidocr-onnxruntime \
+    fastapi "uvicorn[standard]" python-multipart reportlab
 ```
 
 Optional — enable DICOM support:
@@ -589,18 +588,21 @@ Start the FastAPI backend (serves the built SPA at `/`):
 
 ```bash
 cd fl_project
-PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=. PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
 cd fl_project
+$env:PYTHONPATH = $PWD
 $env:PYTHONIOENCODING = 'utf-8'
-uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 **Windows (CMD / `.bat`):**
+
+> **Note:** `run_api.bat` has a hardcoded Python path and uses the incorrect module path `src.api:app`. Edit the `PYTHON` variable and change the uvicorn invocation to `backend.api:app` before use, or use the PowerShell command above instead.
 
 ```bat
 run_api.bat
@@ -925,11 +927,11 @@ pip install -r requirements.txt
 cd frontend && npm install && npm run build && cd ..
 
 # 4. Retrain ScanGate (if scan_gate.pth is missing or you want to update it)
-python backend/train_gate.py
+PYTHONPATH=. python backend/train_gate.py
 
 # 5. Restart the backend
 pkill -f "uvicorn backend.api"
-PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=. PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 
 # 6. Confirm ScanGate is loaded
 curl http://127.0.0.1:8000/api/health | python3 -m json.tool
@@ -950,12 +952,14 @@ pip install -r requirements.txt
 cd frontend; npm install; npm run build; cd ..
 
 # 4. Retrain ScanGate
+$env:PYTHONPATH = $PWD
 python backend/train_gate.py
 
 # 5. Restart the backend (kill old process first)
 taskkill /F /IM python.exe /T
+$env:PYTHONPATH = $PWD
 $env:PYTHONIOENCODING = 'utf-8'
-uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 
 # 6. Confirm ScanGate is loaded
 Invoke-RestMethod http://127.0.0.1:8000/api/health
@@ -1063,9 +1067,11 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 
 - Training runs on **CPU only** by default — no GPU required; each FL round takes ~7–10 minutes
 - `PYTHONIOENCODING=utf-8` is required on Windows to avoid cp1252 encoding errors with Flower's log output
-- The pneumonia dataset folder has a typo (`pneomonia_classification`) — intentional; matches the extracted folder name from Kaggle
+- **`PYTHONPATH` must be set to the project root** when launching uvicorn so Python can resolve the `backend` package (e.g. `$env:PYTHONPATH = $PWD` in PowerShell or `PYTHONPATH=.` in bash)
+- `requirements.txt` pins `scikit-learn>=1.8.0` which requires Python ≥3.11; on Python 3.10 install `scikit-learn>=1.5` instead
+- `run_api.bat` has a hardcoded Python path and an incorrect module reference (`src.api:app` instead of `backend.api:app`) — use the PowerShell commands above on any machine other than the original dev machine
 - The best known checkpoint is `global_model.pth` at **91.73%** accuracy, produced by 3 continuation rounds of `train_sim.py` from the Round 5 FL base
-- OCR is fully optional — the dashboard degrades gracefully and shows an install hint when `rapidocr-onnxruntime` is not present
-- `scan_gate.pth` is required for full gate functionality but is not strictly required to start the server — if missing, the backend logs a warning and falls back to heuristics
+- OCR is fully optional — the dashboard degrades gracefully when `rapidocr-onnxruntime` is not present
+- `scan_gate.pth` is required for full gate functionality but not strictly required to start the server — if missing, the backend logs a warning and falls back to pixel heuristics
 - CIFAR-10 is downloaded automatically on the first `train_gate.py` run (~163 MB); cached in `data/cifar10_cache/` for subsequent runs
-- The ScanGate keeps RGB colour information at inference time — this is intentional; colour is the primary signal used to reject non-medical photos
+- The ScanGate keeps RGB colour information at inference time — colour is the primary signal used to reject non-medical photos

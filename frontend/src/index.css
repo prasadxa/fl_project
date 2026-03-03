@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #2563eb;
+  --color-brand-light: #3b82f6;
+  --color-brand-dark: #1d4ed8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-glioma: #ef4444;
+  --color-meningioma: #f59e0b;
+  --color-notumor: #10b981;
+  --color-pituitary: #8b5cf6;
+  --color-normal: #06b6d4;
+  --color-pneumonia: #e11d48;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+    font-family: var(--font-sans);
+  }
+}
+
+/* confidence ring animation */
+.conf-ring-animate {
+  animation: ring-fill 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: 251.2;
+  }
+}
+
+/* toast slide-in */
+.toast-in {
+  animation: toast-slide 0.3s ease forwards;
+}
+@keyframes toast-slide {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* drag hover pulse */
+.drag-pulse {
+  animation: pulse-border 1s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%,
+  100% {
+    border-color: #3b82f6;
+  }
+  50% {
+    border-color: #93c5fd;
+  }
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}

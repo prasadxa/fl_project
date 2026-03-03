@@ -35,6 +35,7 @@ data/*.db-wal
 # ── Audit log (runtime, rotating — not source) ────────────────────────────────
 data/audit.log
 
+
 # ── Archived doctor-verified images (patient data — never commit) ─────────────
 data/archived_data/
 

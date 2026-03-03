@@ -491,7 +491,7 @@ function OcrRejectionBanner({
   const hint = isUnavailable
     ? "Contact the system administrator to install rapidocr-onnxruntime on the server."
     : isUnconfirmed
-      ? "Upload a chest X-ray with standard PACS/radiograph text overlays (AP, PA, kVp, chest, etc.)."
+      ? "The ML scan classifier could not confirm this image with sufficient confidence, and no X-ray text markers were found. Upload a clear, original chest X-ray exported from a radiology system or PACS (JPEG / PNG / DICOM)."
       : hintMap[scanTypeDetected] || "";
 
   const bgColour = isUnavailable
@@ -560,8 +560,8 @@ function OcrCheckingPanel({ scanType }) {
   const isCxr = scanType === "Chest X-Ray";
   const heading = isCxr ? "Verifying X-Ray..." : "Verifying Medical Scan...";
   const subtext = isCxr
-    ? "Running OCR & visual checks to confirm this is a valid chest X-ray before inference."
-    : "Running visual checks to confirm this is a valid medical scan before inference.";
+    ? "Running ML scan classifier + OCR checks to confirm this is a valid chest X-ray before inference."
+    : "Running ML scan classifier + visual checks to confirm this is a valid medical scan before inference.";
   return (
     <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/60 p-6 text-center fade-in">
       <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-teal-100 flex items-center justify-center">
@@ -595,10 +595,17 @@ function OcrCheckingPanel({ scanType }) {
 /* ── OCR Pass Banner ── */
 function OcrPassBanner({ keywords, scanType }) {
   const isCxr = scanType === "Chest X-Ray";
+  const hasOcrMarkers = keywords && keywords.length > 0;
+
   const passLabel = isCxr ? "X-Ray Verified ✓" : "Medical Scan Verified ✓";
+
+  // Differentiate message: OCR confirmed vs ML gate confirmed (no text markers)
   const passDetail = isCxr
-    ? "OCR confirmed valid chest X-ray."
-    : "Visual check confirmed valid medical scan.";
+    ? hasOcrMarkers
+      ? "OCR confirmed valid chest X-ray."
+      : "Scan classifier confirmed valid chest X-ray (no text markers present — clean scan)."
+    : "Scan classifier confirmed valid medical scan.";
+
   return (
     <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/40 p-4 flex items-center gap-4 fade-in">
       <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
@@ -620,7 +627,7 @@ function OcrPassBanner({ keywords, scanType }) {
         <p className="text-sm font-bold text-teal-700">{passLabel}</p>
         <p className="text-xs text-teal-600/80 mt-0.5">
           {passDetail}
-          {keywords && keywords.length > 0 && (
+          {hasOcrMarkers && (
             <span className="ml-1 font-mono">
               ({keywords.slice(0, 4).join(", ")})
             </span>

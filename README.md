@@ -2,14 +2,14 @@
 
 A privacy-preserving, continuously-learning federated learning (FL) system using **Flower** and **PyTorch** that classifies medical images across two datasets — Brain Tumor MRI scans and Pneumonia Chest X-Rays — without any patient data ever leaving the local device.
 
-The system ships two clinical interfaces:
+The system ships a **React + Vite** web dashboard backed by **FastAPI**, plus a legacy Streamlit UI for FL-edge workflows.
 
 | Interface | Stack | Launch |
 |---|---|---|
-| **Web Dashboard** *(primary)* | FastAPI + Vanilla SPA | `run_api.bat` → `http://127.0.0.1:8000` |
-| **Streamlit UI** *(legacy)* | Streamlit | `run_edge.bat` → `http://localhost:8501` |
+| **Web Dashboard** *(primary)* | FastAPI + React/Vite SPA | see [Option A](#option-a--web-dashboard-recommended) → `http://127.0.0.1:8000` |
+| **Streamlit UI** *(legacy)* | Streamlit | see [Option B](#option-b--full-fl-edge-system--streamlit-ui) → `http://localhost:8501` |
 
-Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, and a continual learning pipeline that incorporates new doctor-verified images into the next federated training round.
+Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, a layered upload-validation gate (ScanGate ML + visual heuristics + OCR), and a continual learning pipeline that incorporates new doctor-verified images into the next federated training round.
 
 ---
 
@@ -19,10 +19,10 @@ Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, and 
 |---|---|
 | **Task** | 6-class medical image classification |
 | **FL Framework** | Flower (flwr) 1.26.1 |
-| **Deep Learning** | PyTorch 2.10.0 (CPU) |
+| **Deep Learning** | PyTorch ≥ 2.7.0 |
 | **Algorithm** | FedAvg (Federated Averaging) |
 | **Clients** | 3 simulated FL clients |
-| **Rounds** | 5 initial FL rounds + 3 continuation rounds via `train_sim.py` |
+| **Rounds** | 5 initial FL rounds + continuation rounds via `train_sim.py` |
 | **Total Images** | 13,056 |
 | **Final Accuracy** | **91.73%** |
 
@@ -59,24 +59,34 @@ Both UIs support doctor-in-the-loop feedback, automatic EXIF anonymisation, and 
 
 ```
 fl_project/
-├── frontend/                           # Web Dashboard (SPA)
-│   ├── index.html                      # Single-page application shell
-│   ├── style.css                       # Medical-grade UI (navy + white + blue)
-│   └── app.js                          # Inference, chart, OCR, doctor flow, report
+├── frontend/                           # React + Vite SPA (web dashboard)
+│   ├── src/
+│   │   ├── pages/
+│   │   │   └── Classify.jsx            # Upload, scan-type selector, results UI
+│   │   └── utils/
+│   │       └── api.js                  # Fetch wrappers, canonicalizeScanType()
+│   ├── public/
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
 │
-├── src/
-│   ├── api.py                          # FastAPI backend — serves SPA + all API routes
+├── backend/
+│   ├── api.py                          # FastAPI app — all /api/* routes + SPA mount
 │   ├── model.py                        # MedicalCNN architecture + train/eval helpers
 │   ├── dataset.py                      # PyTorch Dataset, DataLoader, CLASS_NAMES
 │   ├── anonymizer.py                   # EXIF/metadata stripper (Pillow pixel rebuild)
 │   ├── ocr_reader.py                   # RapidOCR wrapper (PP-OCRv3, optional)
+│   ├── scan_classifier.py              # ★ ScanGate — EfficientNet-B0 4-class gatekeeper
+│   ├── train_gate.py                   # ★ Training script for scan_gate.pth
 │   ├── preprocess.py                   # Phase 1 — data loading and partitioning
 │   ├── client.py                       # Flower FL client + continual learning
-│   ├── server.py                       # Flower FL server (continuous / always-on)
 │   ├── app.py                          # Legacy Streamlit clinical UI (dual-mode)
 │   ├── evaluate_global.py              # Final evaluation and metrics
 │   ├── train_sim.py                    # Standalone FedAvg simulation (no network)
-│   └── utils.py                        # Shared utilities (deprecation filter)
+│   ├── db.py                           # SQLite persistence (sessions + feedback)
+│   ├── report_generator.py             # Plain-text diagnostic report builder
+│   ├── latex_report.py                 # PDF report (ReportLab)
+│   └── utils.py                        # Shared utilities
 │
 ├── data/
 │   ├── raw/
@@ -89,62 +99,149 @@ fl_project/
 │   │   ├── client_2/                   # ~3,699 images (6 class subfolders)
 │   │   ├── client_3/                   # ~3,700 images (6 class subfolders)
 │   │   └── global_test/                # ~1,959 images (held-out evaluation set)
-│   ├── new_collected_data/             # Doctor-verified images queued for next FL round
+│   ├── gate_data/
+│   │   ├── ct_scan/                    # Optional CT images for ScanGate training
+│   │   └── non_medical/                # Optional extra non-medical images
+│   ├── cifar10_cache/                  # Auto-downloaded by train_gate.py
+│   ├── new_collected_data/             # Doctor-verified images → next FL round
 │   │   └── {glioma,meningioma,notumor,pituitary,normal,pneumonia}/
-│   └── archived_data/                  # Processed images moved here after each FL round
+│   ├── archived_data/                  # Processed images moved here after FL round
+│   └── audit.log                       # Gate pass/reject audit log (rotating, 5 MB)
 │
 ├── models/
-│   ├── global_model.pth                # Latest aggregated global model (always overwritten)
+│   ├── global_model.pth                # Latest aggregated global model (MedicalCNN)
 │   ├── global_model_round_N_<ts>.pth   # Timestamped checkpoint per round
+│   ├── scan_gate.pth                   # ★ ScanGate EfficientNet-B0 weights
 │   └── confusion_matrix.png            # Confusion matrix heatmap
 │
 ├── logs/
 │   ├── server.log
-│   ├── client1.log
-│   ├── client2.log
-│   └── client3.log
+│   ├── client1.log / client2.log / client3.log
 │
-├── run_api.bat                         # ★ Launch FastAPI web dashboard (recommended)
-├── run_edge.bat                        # Launch full FL edge system + Streamlit UI
-├── run.bat                             # Launch FL server + 3 clients only (no UI)
+├── run_api.bat                         # Windows: launch FastAPI + serve SPA
+├── run_edge.bat                        # Windows: full FL edge system + Streamlit
+├── run.bat                             # Windows: FL server + 3 clients only
 ├── requirements.txt                    # Pinned Python dependencies
 └── README.md
 ```
 
 ---
 
-## Web Dashboard (FastAPI + SPA)
+## Upload Validation Gate (ScanGate)
+
+Every image upload passes through a **three-layer gate** before reaching the main clinical model. This prevents wrong-modality uploads and non-medical images from being classified.
+
+```
+Upload
+  │
+  ▼
+┌─────────────────────────────────────────────────────────┐
+│  Layer 1 — ScanGate ML  (backend/scan_classifier.py)    │
+│  EfficientNet-B0 4-class classifier                     │
+│  Classes: chest_xray · brain_mri · ct_scan · non_medical│
+│  Threshold: 0.65 confidence                             │
+│  → REJECT if predicted class ≠ expected OR conf < 0.65  │
+└─────────────────────────┬───────────────────────────────┘
+                          │ PASS
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Layer 2 — Visual Heuristic  (_is_likely_medical_scan)  │
+│  Pixel-level grayscale ratio, saturation, histogram     │
+│  Also runs browser-side (canvas API) on file select     │
+│  → REJECT if image is clearly non-medical / colour photo│
+└─────────────────────────┬───────────────────────────────┘
+                          │ PASS
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3 — OCR Gate  (backend/ocr_reader.py)            │
+│  RapidOCR PP-OCRv3 scans for modality text markers      │
+│  • OCR confirms correct modality  → ALLOW               │
+│  • OCR confirms wrong modality    → REJECT               │
+│  • OCR inconclusive (no text)     → defer to ScanGate   │
+│    – ScanGate conf ≥ 0.65         → ALLOW               │
+│    – ScanGate conf < 0.65         → REJECT               │
+└─────────────────────────┬───────────────────────────────┘
+                          │ PASS
+                          ▼
+                  Main CNN Inference
+                  (MedicalCNN global_model.pth)
+```
+
+### ScanGate Classes & Routing
+
+| Gate Label | Accepted For |
+|---|---|
+| `chest_xray` | Chest X-Ray mode |
+| `brain_mri` | Brain MRI mode |
+| `ct_scan` | Rejected (not a supported inference mode) |
+| `non_medical` | Always rejected |
+
+### Audit Log Events
+
+All gate decisions are written to `data/audit.log`:
+
+| Event | Meaning |
+|---|---|
+| `SCAN_GATE_PASS` | ScanGate confirmed expected modality |
+| `SCAN_GATE_REJECT` | ScanGate identified wrong modality or non-medical |
+| `OCR_INCONCLUSIVE_GATE_PASS` | No OCR text found; ScanGate confidence ≥ 0.65 — allowed |
+| `OCR_INCONCLUSIVE_GATE_REJECT` | No OCR text found; ScanGate confidence < 0.65 — rejected |
+
+### Test Results (local partition sweep)
+
+| Test | Result |
+|---|---|
+| Chest X-Rays in Chest X-Ray mode | 690 / 690 passed |
+| Brain MRIs in Brain MRI mode | 1,799 / 1,800 passed |
+| Brain MRI uploaded as Chest X-Ray | Blocked |
+| Chest X-Ray uploaded as Brain MRI | Blocked |
+| Non-medical / CIFAR-10 images | Blocked |
+
+---
+
+## Web Dashboard (FastAPI + React SPA)
 
 ### Architecture
 
 ```
-Browser  ←──────────────────────────────────────────────────────►  FastAPI (src/api.py)
- │                                                                          │
- │  GET /          → serves frontend/index.html                            │
- │  GET /style.css → serves frontend/style.css                             │
- │  GET /app.js    → serves frontend/app.js                                │
- │                                                                          │
- │  GET  /api/health        → model + OCR liveness check                   │
- │  GET  /api/model-info    → class registry, scan modes, colours          │
- │  POST /api/predict       → image inference (multipart/form-data)        │
- │  POST /api/feedback      → doctor confirmation / override               │
- │  GET  /api/queue         → last 50 feedback entries                     │
- │  GET  /api/report        → plain-text diagnostic report (download)      │
- │                                                                          │
- │  Docs: /api/docs  (Swagger UI)                                           │
- │  Docs: /api/redoc (ReDoc)                                                │
+Browser (React/Vite)  ◄──────────────────────►  FastAPI (backend/api.py)
+ │                                                        │
+ │  GET  /                  → serves built SPA            │
+ │  GET  /api/health        → model + OCR liveness        │
+ │  GET  /api/model-info    → class registry, scan modes  │
+ │  POST /api/ocr-check     → standalone OCR pre-check    │
+ │  POST /api/predict       → full gate + inference       │
+ │  POST /api/feedback      → doctor confirm / override   │
+ │  GET  /api/queue         → last 50 feedback entries    │
+ │  GET  /api/report        → plain-text report download  │
+ │  POST /api/pdf-report    → PDF report generation       │
+ │  GET  /api/admin/stats           → aggregate stats     │
+ │  GET  /api/admin/feedback        → paginated log       │
+ │  GET  /api/admin/export-csv      → full CSV export     │
+ │  GET  /api/admin/export-excel    → Excel workbook      │
+ │  GET  /api/admin/sessions        → paginated sessions  │
+ │                                                        │
+ │  Docs: /api/docs  (Swagger UI)                         │
+ │  Docs: /api/redoc (ReDoc)                              │
 ```
 
 ### API Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/health` | Liveness check — returns `model_loaded`, `ocr_available`, timestamp |
+| `GET` | `/api/health` | Liveness — returns `model_loaded`, `ocr_available`, `scan_gate_loaded` |
 | `GET` | `/api/model-info` | Class names, scan-mode configs, risk colours |
-| `POST` | `/api/predict` | Upload image + scan type → probabilities, top class, OCR lines |
-| `POST` | `/api/feedback` | Submit doctor confirmation / override; saves anonymised image |
+| `POST` | `/api/ocr-check` | Standalone OCR pre-check (called by frontend before predict) |
+| `POST` | `/api/predict` | Upload image + scan type → full gate + probabilities + OCR lines |
+| `POST` | `/api/feedback` | Doctor confirmation / override; saves anonymised image |
 | `GET` | `/api/queue` | Fetch last 50 confirmed/overridden feedback entries |
-| `GET` | `/api/report` | Download a plain-text diagnostic report for a session |
+| `GET` | `/api/report` | Download plain-text diagnostic report for a session |
+| `POST` | `/api/pdf-report` | Generate and download PDF diagnostic report |
+| `GET` | `/api/admin/stats` | Aggregate statistics from SQLite |
+| `GET` | `/api/admin/feedback` | Paginated feedback log |
+| `GET` | `/api/admin/export-csv` | Download full feedback CSV |
+| `GET` | `/api/admin/export-excel` | Download full admin report as Excel workbook |
+| `GET` | `/api/admin/sessions` | Paginated prediction sessions |
 
 #### `POST /api/predict` — Request / Response
 
@@ -152,7 +249,7 @@ Browser  ←──────────────────────�
 
 | Field | Type | Description |
 |---|---|---|
-| `image` | file | JPEG or PNG medical scan (max 20 MB) |
+| `image` | file | JPEG, PNG, WebP, BMP, TIFF, GIF, AVIF, HEIC, DICOM — max 30 MB |
 | `scan_type` | string | `"Brain MRI"` or `"Chest X-Ray"` |
 
 **Response** (JSON):
@@ -161,23 +258,33 @@ Browser  ←──────────────────────�
 {
   "session_id": "uuid4-string",
   "filename": "abc123.jpg",
-  "scan_type": "Brain MRI",
-  "mode_predicted_class": "Glioma (Brain Tumor)",
-  "mode_predicted_key": "glioma",
-  "mode_confidence": 0.9412,
+  "scan_type": "Chest X-Ray",
+  "mode_predicted_class": "Pneumonia Detected",
+  "mode_predicted_key": "pneumonia",
+  "mode_confidence": 0.9723,
   "probabilities": {
-    "glioma": 0.9412,
-    "meningioma": 0.0301,
-    "notumor": 0.0187,
-    "pituitary": 0.0100,
-    "normal": 0.0000,
-    "pneumonia": 0.0000
+    "glioma": 0.0000,
+    "meningioma": 0.0000,
+    "notumor": 0.0000,
+    "pituitary": 0.0000,
+    "normal": 0.0277,
+    "pneumonia": 0.9723
   },
-  "ocr_text": "Patient ID: ...",
+  "ocr_text": "AP CHEST",
   "ocr_lines": [
-    { "text": "Patient ID: 00421", "confidence": 0.97 }
+    { "text": "AP CHEST", "confidence": 0.94 }
   ],
-  "ocr_elapsed_ms": 142
+  "ocr_elapsed_ms": 138,
+  "gate_label": "chest_xray",
+  "gate_confidence": 0.9712
+}
+```
+
+**Gate rejection response** (HTTP 400):
+
+```json
+{
+  "detail": "ScanGate rejected: predicted 'brain_mri' (conf 0.91) — expected 'chest_xray'. Upload a Chest X-Ray image."
 }
 ```
 
@@ -185,16 +292,19 @@ Browser  ←──────────────────────�
 
 | Feature | Detail |
 |---|---|
-| **Scan type selector** | Sidebar toggle between 🧠 Brain MRI and 🫁 Chest X-Ray |
-| **Drag-and-drop upload** | JPEG / PNG, up to 20 MB; shimmer animation on hover |
-| **AI inference** | Runs against `/api/predict`; shows top class + risk badge |
-| **Probability chart** | Horizontal bar chart (Chart.js) — scan-type filtered classes only |
-| **OCR panel** | Extracted text lines with per-line confidence badges (requires `rapidocr-onnxruntime`) |
+| **Scan type selector** | Toggle between 🧠 Brain MRI and 🫁 Chest X-Ray |
+| **Browser-side visual check** | Canvas analysis on file select — rejects obvious non-medical images before upload |
+| **Classify button guard** | Button disabled while browser visual check is running |
+| **Drag-and-drop upload** | JPEG / PNG / WebP up to 30 MB; shimmer animation on hover |
+| **AI inference** | Runs against `/api/predict` through full gate; shows top class + risk badge |
+| **Probability chart** | Horizontal bar chart — scan-type filtered classes only |
+| **OCR panel** | Extracted text lines with per-line confidence badges |
+| **Gate status message** | Shows whether ScanGate or OCR (or both) confirmed the image |
 | **Clinician review** | Doctor confirms or overrides the AI prediction via a dropdown |
-| **AI Override badge** | Warning badge appears when doctor selection differs from AI |
-| **Session queue** | Sidebar counters track confirmed / overridden cases this session |
-| **Report download** | Plain-text diagnostic report including probabilities and OCR text |
-| **Status pills** | Live header indicators for model readiness and OCR availability |
+| **AI Override badge** | Warning badge when doctor selection differs from AI |
+| **Session queue** | Sidebar counters: confirmed / overridden cases this session |
+| **Report download** | Plain-text or PDF diagnostic report |
+| **Status pills** | Live header indicators for model readiness, OCR, and ScanGate |
 | **Responsive layout** | Collapses gracefully at 900 px and 680 px breakpoints |
 
 ---
@@ -219,7 +329,23 @@ Block 3:  Conv2d(64→128) + BatchNorm + ReLU + MaxPool  →  16×16
 | **Loss** | CrossEntropyLoss |
 | **Optimizer** | Adam (lr = 1e-3) |
 | **LR Scheduler** | StepLR (γ = 0.9 per round) |
-| **Preprocessing** | RGB → BGR → Grayscale → resize 128×128 (cv2 INTER_AREA) → Normalize(0.5, 0.5) |
+| **Preprocessing** | RGB → Grayscale → resize 128×128 (cv2 INTER_AREA) → Normalize(0.5, 0.5) |
+
+---
+
+## ScanGate Architecture — `EfficientNet-B0`
+
+**Input**: RGB image, **224 × 224 pixels** (ImageNet normalisation)
+
+| Property | Value |
+|---|---|
+| **Base model** | EfficientNet-B0 (pretrained ImageNet) |
+| **Output classes** | 4 (`chest_xray`, `brain_mri`, `ct_scan`, `non_medical`) |
+| **Gate threshold** | 0.65 confidence (empirically set; real X-rays score ≥ 0.70) |
+| **Weights** | `models/scan_gate.pth` |
+| **Fallback** | Pure pixel heuristics if `scan_gate.pth` is missing |
+| **Training data** | `data/partitions/global_test/` (medical) + CIFAR-10 (non-medical) |
+| **Non-medical CIFAR classes** | cat, dog, horse, deer, ship, automobile, bird, frog |
 
 ---
 
@@ -274,12 +400,16 @@ Block 3:  Conv2d(64→128) + BatchNorm + ReLU + MaxPool  →  16×16
 │  Clinician selects Scan Type (Brain MRI / Chest X-Ray)          │
 │  Clinician uploads image                                         │
 │       │                                                          │
+│       ▼  (browser canvas pre-check — blocks obvious non-medical) │
+│  FastAPI  /api/ocr-check  (OCR pre-flight)                       │
+│       │                                                          │
 │       ▼                                                          │
 │  FastAPI  /api/predict                                           │
-│  ├─ AI inference → restricted to valid classes for scan type    │
-│  ├─ Probabilities returned for scan-type classes only           │
-│  ├─ OCR extracts text annotations (if rapidocr installed)       │
-│  └─ Temp image stored server-side, keyed by session_id          │
+│  ├─ Layer 1: ScanGate ML (EfficientNet-B0)                      │
+│  ├─ Layer 2: Visual heuristic (_is_likely_medical_scan)         │
+│  ├─ Layer 3: OCR gate (modality text markers)                   │
+│  ├─ Main CNN inference (MedicalCNN — restricted to scan mode)   │
+│  └─ Probabilities + gate metadata returned                      │
 │       │                                                          │
 │       ▼  (doctor confirms or overrides)                          │
 │  FastAPI  /api/feedback                                          │
@@ -302,12 +432,10 @@ Block 3:  Conv2d(64→128) + BatchNorm + ReLU + MaxPool  →  16×16
 
 ### Dual-Mode Scan Type Selector
 
-Both UIs enforce a scan-type gate that prevents cross-modality false positives:
-
-| Mode | Inference Classes | Override Options |
+| Mode | Inference Classes | Gate Label Required |
 |---|---|---|
-| 🧠 Brain MRI | Glioma, Meningioma, No Tumor, Pituitary | Brain classes only |
-| 🫁 Chest X-Ray | Normal / Healthy, Pneumonia Detected | CXR classes only |
+| 🧠 Brain MRI | Glioma, Meningioma, No Tumor, Pituitary | `brain_mri` |
+| 🫁 Chest X-Ray | Normal / Healthy, Pneumonia Detected | `chest_xray` |
 
 ---
 
@@ -315,16 +443,24 @@ Both UIs enforce a scan-type gate that prevents cross-modality false positives:
 
 ### Prerequisites
 
-```
-Python >= 3.10
-```
+- **Python** ≥ 3.10
+- **Node.js** ≥ 18 (for the React frontend)
+- Datasets downloaded from Kaggle into `data/raw/` (see [Datasets](#datasets))
 
-Install all dependencies:
+---
+
+### Step 0 — Install Python Dependencies
 
 ```bash
-pip install fastapi "uvicorn[standard]" python-multipart torch torchvision \
-            flwr opencv-python scikit-learn pillow matplotlib seaborn numpy \
-            streamlit pandas
+pip install -r requirements.txt
+```
+
+Install individually (if you prefer):
+
+```bash
+pip install torch torchvision fastapi "uvicorn[standard]" python-multipart \
+    opencv-python Pillow numpy scikit-learn pandas openpyxl \
+    matplotlib seaborn reportlab flwr streamlit
 ```
 
 Optional — enable OCR:
@@ -333,43 +469,100 @@ Optional — enable OCR:
 pip install rapidocr-onnxruntime
 ```
 
+Optional — enable DICOM support:
+
+```bash
+pip install pydicom
+```
+
+---
+
+### Step 0b — Build the Frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+> The built files land in `frontend/dist/`. FastAPI serves them automatically — no separate frontend server is needed in production.
+
+For live frontend development (hot-reload):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Then start the backend separately (see Option A below) and the Vite dev server will proxy API calls.
+
 ---
 
 ### Option A — Web Dashboard (Recommended)
+
+Start the FastAPI backend (serves the built SPA at `/`):
+
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Windows (PowerShell):**
+
+```powershell
+cd fl_project
+$env:PYTHONIOENCODING = 'utf-8'
+uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Windows (CMD / `.bat`):**
 
 ```bat
 run_api.bat
 ```
 
-This script:
-1. Verifies the Python installation
-2. Auto-installs `fastapi`, `uvicorn`, and `python-multipart` if missing
-3. Starts the FastAPI server on `http://127.0.0.1:8000`
-4. Opens the browser automatically after 3 seconds
+Then open: **http://127.0.0.1:8000**
 
-The SPA frontend is served directly by FastAPI — no separate frontend server needed.
-
-To start manually:
-
-```powershell
-$env:PYTHONIOENCODING = 'utf-8'
-Set-Location "path\to\fl_project"
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Interactive API docs are available at:
-- Swagger UI → `http://127.0.0.1:8000/api/docs`
-- ReDoc → `http://127.0.0.1:8000/api/redoc`
+Interactive API docs:
+- Swagger UI → **http://127.0.0.1:8000/api/docs**
+- ReDoc → **http://127.0.0.1:8000/api/redoc**
 
 ---
 
 ### Option B — Full FL Edge System + Streamlit UI
 
+**Windows:**
+
 ```bat
 run_edge.bat
 ```
 
-Opens 5 separate windows: FL Server, Client 1, Client 2, Client 3, Streamlit UI.
+**macOS / Linux** (5 separate terminal tabs):
+
+```bash
+# Terminal 1 — FL Server
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/app.py --mode server
+
+# Terminal 2 — FL Client 1
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 1
+
+# Terminal 3 — FL Client 2
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 2
+
+# Terminal 4 — FL Client 3
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 3
+
+# Terminal 5 — Streamlit UI
+cd fl_project
+streamlit run backend/app.py
+```
 
 | Component | URL / Port |
 |---|---|
@@ -380,12 +573,22 @@ Opens 5 separate windows: FL Server, Client 1, Client 2, Client 3, Streamlit UI.
 
 ### Option C — FL Training Only (No UI)
 
+**Windows:**
+
 ```bat
 run.bat
 ```
 
-Starts the FL server and 3 clients in background processes; logs written to `logs/`.
-Press any key in the console to stop all processes.
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 1 &
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 2 &
+PYTHONIOENCODING=utf-8 python backend/client.py --client_id 3 &
+```
+
+Logs are written to `logs/client1.log`, `logs/client2.log`, `logs/client3.log`.
 
 ---
 
@@ -393,58 +596,287 @@ Press any key in the console to stop all processes.
 
 #### Step 1 — Preprocess Data *(only needed once)*
 
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/preprocess.py
+```
+
+**Windows (PowerShell):**
+
 ```powershell
+cd fl_project
 $env:PYTHONIOENCODING = 'utf-8'
-python src/preprocess.py
+python backend/preprocess.py
 ```
 
 Reads all raw images, resizes to 128×128 grayscale (cv2 INTER_AREA), and partitions into `data/partitions/`.
 
-#### Step 2 — Start FL Server
+---
 
-```powershell
-$env:PYTHONIOENCODING = 'utf-8'
-python src/server.py                     # default: min 2 clients, 9999 rounds
-python src/server.py --min_clients 3     # require all 3 clients
+#### Step 2 — Train the ScanGate *(only needed once, or to retrain)*
+
+**macOS / Linux:**
+
+```bash
+cd fl_project
+python backend/train_gate.py
 ```
 
-#### Step 3 — Start FL Clients *(3 separate terminals)*
+With options:
+
+```bash
+# Custom hyperparameters
+python backend/train_gate.py --epochs 20 --batch-size 64 --lr 3e-4
+
+# Skip CIFAR-10 download (use only local non-medical images)
+python backend/train_gate.py --no-cifar
+
+# Force CPU even if GPU available
+python backend/train_gate.py --device cpu
+```
+
+**Windows (PowerShell):**
 
 ```powershell
+cd fl_project
+python backend/train_gate.py
+python backend/train_gate.py --epochs 20 --batch-size 64 --lr 3e-4
+```
+
+Output saved to `models/scan_gate.pth`. The script downloads CIFAR-10 automatically into `data/cifar10_cache/` on first run (requires internet).
+
+---
+
+#### Step 3 — Start FL Server
+
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/app.py --mode server
+# or with options:
+PYTHONIOENCODING=utf-8 python backend/app.py --mode server --min_clients 3
+```
+
+**Windows (PowerShell):**
+
+```powershell
+cd fl_project
 $env:PYTHONIOENCODING = 'utf-8'
-python src/client.py --client_id 1 --batch_size 32 --epochs 2
-python src/client.py --client_id 2 --batch_size 32 --epochs 2
-python src/client.py --client_id 3 --batch_size 32 --epochs 2
+python backend/app.py --mode server
+python backend/app.py --mode server --min_clients 3
+```
+
+---
+
+#### Step 4 — Start FL Clients *(3 separate terminals)*
+
+**macOS / Linux:**
+
+```bash
+# Terminal 1
+cd fl_project && PYTHONIOENCODING=utf-8 python backend/client.py --client_id 1 --batch_size 32 --epochs 2
+
+# Terminal 2
+cd fl_project && PYTHONIOENCODING=utf-8 python backend/client.py --client_id 2 --batch_size 32 --epochs 2
+
+# Terminal 3
+cd fl_project && PYTHONIOENCODING=utf-8 python backend/client.py --client_id 3 --batch_size 32 --epochs 2
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Terminal 1
+$env:PYTHONIOENCODING = 'utf-8'; python backend/client.py --client_id 1 --batch_size 32 --epochs 2
+
+# Terminal 2
+$env:PYTHONIOENCODING = 'utf-8'; python backend/client.py --client_id 2 --batch_size 32 --epochs 2
+
+# Terminal 3
+$env:PYTHONIOENCODING = 'utf-8'; python backend/client.py --client_id 3 --batch_size 32 --epochs 2
 ```
 
 > Start the server first — it waits for at least 2 clients before beginning Round 1.
 
-#### Step 4 — Evaluate Global Model
+---
+
+#### Step 5 — Evaluate Global Model
+
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/evaluate_global.py
+```
+
+**Windows (PowerShell):**
 
 ```powershell
+cd fl_project
 $env:PYTHONIOENCODING = 'utf-8'
-python src/evaluate_global.py
+python backend/evaluate_global.py
 ```
 
 Outputs per-class precision / recall / F1 and saves `models/confusion_matrix.png`.
 
-#### Step 5 — Continue Training (Single-Process, No Network)
+---
 
-```powershell
-$env:PYTHONIOENCODING = 'utf-8'
-python src/train_sim.py
+#### Step 6 — Continue Training (Single-Process, No Network)
+
+**macOS / Linux:**
+
+```bash
+cd fl_project
+PYTHONIOENCODING=utf-8 python backend/train_sim.py
 ```
 
-Runs standalone FedAvg simulation — identical math to the real FL stack but without gRPC or Ray. Ideal for continued training on a single machine.
-
-#### Monitor Logs
+**Windows (PowerShell):**
 
 ```powershell
-# Live tail of server log
-Get-Content logs/server.log -Wait | Select-Object -Last 20
+cd fl_project
+$env:PYTHONIOENCODING = 'utf-8'
+python backend/train_sim.py
+```
+
+Runs standalone FedAvg simulation — identical math to the real FL stack but without gRPC. Ideal for continued training on a single machine.
+
+---
+
+### Monitor & Tail Logs
+
+**macOS / Linux:**
+
+```bash
+# Live tail — server log
+tail -f fl_project/logs/server.log
+
+# Live tail — all client logs at once
+tail -f fl_project/logs/client1.log fl_project/logs/client2.log fl_project/logs/client3.log
+
+# Tail audit gate log
+tail -f fl_project/data/audit.log
+
+# Search for gate rejections
+grep "SCAN_GATE_REJECT" fl_project/data/audit.log
+
+# Search for OCR inconclusive passes
+grep "OCR_INCONCLUSIVE_GATE_PASS" fl_project/data/audit.log
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Live tail — server log
+Get-Content logs/server.log -Wait | Select-Object -Last 30
+
+# Live tail — audit log
+Get-Content data/audit.log -Wait | Select-Object -Last 30
+
+# Search gate rejections
+Select-String "SCAN_GATE_REJECT" data/audit.log
 
 # Stop all Python processes
 taskkill /F /IM python.exe /T
+```
+
+---
+
+### Smoke-Test API Endpoints
+
+After starting the backend, verify it is healthy:
+
+```bash
+# Health check
+curl http://127.0.0.1:8000/api/health
+
+# Model info
+curl http://127.0.0.1:8000/api/model-info
+
+# Upload a test image (Chest X-Ray)
+curl -X POST http://127.0.0.1:8000/api/predict \
+  -F "image=@/path/to/chest_xray.jpg" \
+  -F "scan_type=Chest X-Ray"
+
+# Upload a test image (Brain MRI)
+curl -X POST http://127.0.0.1:8000/api/predict \
+  -F "image=@/path/to/brain_mri.jpg" \
+  -F "scan_type=Brain MRI"
+
+# Run standalone OCR pre-check
+curl -X POST http://127.0.0.1:8000/api/ocr-check \
+  -F "image=@/path/to/chest_xray.jpg" \
+  -F "scan_type=Chest X-Ray"
+```
+
+**Windows (PowerShell — using Invoke-RestMethod):**
+
+```powershell
+# Health check
+Invoke-RestMethod http://127.0.0.1:8000/api/health
+
+# Upload a test image
+$form = @{
+    image     = Get-Item "C:\path\to\chest_xray.jpg"
+    scan_type = "Chest X-Ray"
+}
+Invoke-RestMethod -Uri http://127.0.0.1:8000/api/predict -Method Post -Form $form
+```
+
+---
+
+### Deployment Checklist
+
+After pulling new code or retraining the ScanGate:
+
+```bash
+# 1. Pull latest code
+cd fl_project
+git pull
+
+# 2. Install any new dependencies
+pip install -r requirements.txt
+
+# 3. Rebuild the frontend (if frontend files changed)
+cd frontend && npm install && npm run build && cd ..
+
+# 4. Retrain ScanGate (if scan_gate.pth is missing or you want to update it)
+python backend/train_gate.py
+
+# 5. Restart the backend
+pkill -f "uvicorn backend.api"
+PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+
+# 6. Confirm ScanGate is loaded
+curl http://127.0.0.1:8000/api/health | python3 -m json.tool
+# → "scan_gate_loaded": true
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# 1. Pull latest code
+cd fl_project
+git pull
+
+# 2. Install any new dependencies
+pip install -r requirements.txt
+
+# 3. Rebuild the frontend
+cd frontend; npm install; npm run build; cd ..
+
+# 4. Retrain ScanGate
+python backend/train_gate.py
+
+# 5. Restart the backend (kill old process first)
+taskkill /F /IM python.exe /T
+$env:PYTHONIOENCODING = 'utf-8'
+uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+
+# 6. Confirm ScanGate is loaded
+Invoke-RestMethod http://127.0.0.1:8000/api/health
 ```
 
 ---
@@ -486,27 +918,37 @@ taskkill /F /IM python.exe /T
 
 Confusion matrix saved at: `models/confusion_matrix.png`
 
+### ScanGate Gate Confidence (local partition test)
+
+| Modality | Mean Confidence | Min Confidence | Pass Rate |
+|---|---|---|---|
+| Chest X-Ray | 96.7% | 69.7% | 690/690 |
+| Brain MRI | ~95% | ~71% | 1,799/1,800 |
+
 ---
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/api.py` | FastAPI app — mounts SPA at `/`, exposes all `/api/*` routes, loads model on startup |
-| `frontend/index.html` | SPA shell — header, sidebar, upload card, results grid, OCR panel, doctor panel |
-| `frontend/style.css` | Medical UI — CSS custom properties, fixed chart height (no `flex:1`), sticky sidebar |
-| `frontend/app.js` | Client logic — fetch wrappers, Chart.js bar chart, OCR render, feedback flow, report download |
-| `src/model.py` | `MedicalCNN` definition + `train_one_epoch` / `evaluate` helpers |
-| `src/dataset.py` | `MedicalDataset`, `CLASS_NAMES`, `NUM_CLASSES`, `get_transforms` |
-| `src/anonymizer.py` | `strip_metadata_and_save(pil_img, path)` — pixel rebuild strips 100% of EXIF/XMP/GPS |
-| `src/ocr_reader.py` | `extract_text()`, `filter_medical_text()`, `is_ocr_available()` — RapidOCR PP-OCRv3 wrapper |
-| `src/client.py` | Flower `NumPyClient` — scans `new_collected_data/` before each `fit()`, archives after |
-| `src/server.py` | Always-on Flower server — `num_rounds=9999`, per-round `.pth` checkpoints, UTC log timestamps |
-| `src/train_sim.py` | Self-contained FedAvg simulation — no Flower network stack, no Ray |
-| `src/evaluate_global.py` | Loads `global_model.pth`, runs inference on `global_test/`, prints report + saves confusion matrix |
-| `run_api.bat` | One-click FastAPI + SPA launcher; auto-installs deps, opens browser |
-| `run_edge.bat` | Launches FL server, 3 clients, and Streamlit UI in separate windows |
-| `run.bat` | Launches FL server + 3 clients only (background, logs to `logs/`) |
+| `backend/api.py` | FastAPI app — mounts SPA at `/`, exposes all `/api/*` routes, loads models on startup |
+| `backend/scan_classifier.py` | **ScanGate** — EfficientNet-B0 4-class gatekeeper; heuristic fallback if weights missing |
+| `backend/train_gate.py` | Training script for `scan_gate.pth`; downloads CIFAR-10 automatically |
+| `backend/model.py` | `MedicalCNN` definition + `train_one_epoch` / `evaluate` helpers |
+| `backend/dataset.py` | `MedicalDataset`, `CLASS_NAMES`, `NUM_CLASSES`, `get_transforms` |
+| `backend/anonymizer.py` | `strip_metadata_and_save()` — pixel rebuild strips 100% of EXIF/XMP/GPS |
+| `backend/ocr_reader.py` | `extract_text()`, `filter_medical_text()`, `is_ocr_available()` — RapidOCR wrapper |
+| `backend/client.py` | Flower `NumPyClient` — scans `new_collected_data/` before each `fit()`, archives after |
+| `backend/train_sim.py` | Self-contained FedAvg simulation — no Flower network stack |
+| `backend/evaluate_global.py` | Loads `global_model.pth`, runs inference on `global_test/`, prints report + confusion matrix |
+| `frontend/src/utils/api.js` | Fetch wrappers + `canonicalizeScanType()` (prevents string-mismatch bugs) |
+| `frontend/src/pages/Classify.jsx` | Main upload UI, canvas pre-check, scan-type selector, results render |
+| `models/global_model.pth` | Latest MedicalCNN weights (6-class classifier) |
+| `models/scan_gate.pth` | ScanGate EfficientNet-B0 weights |
+| `data/audit.log` | Rotating audit log for all gate pass/reject events |
+| `run_api.bat` | Windows: one-click FastAPI launcher |
+| `run_edge.bat` | Windows: launches FL server, 3 clients, and Streamlit UI |
+| `run.bat` | Windows: FL server + 3 clients only (background, logs to `logs/`) |
 
 ---
 
@@ -514,27 +956,34 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 
 | Decision | Rationale |
 |---|---|
-| FastAPI + Vanilla SPA | Zero build step — edit HTML/CSS/JS and refresh; no Node.js required |
-| Grayscale 128×128 input | Unified representation for both MRI and CXR modalities |
+| Three-layer upload gate (ScanGate → visual → OCR) | OCR alone is brittle — clean clinical images often have no text; layered approach handles the full range of real-world inputs |
+| EfficientNet-B0 for ScanGate | Lightweight (~5M params), pretrained on ImageNet, excellent transfer to medical modality detection |
+| Confidence threshold 0.65 | Real X-rays score ≥ 0.70 (min observed); non-medical images score ≤ 0.58 — safe margin with no false rejects in the test set |
+| OCR inconclusive → defer to ScanGate | Many real clinical images have no overlay text; requiring OCR confirmation would block 100% of clean scans |
+| `canonicalizeScanType()` on frontend + backend | Prevents silent routing bugs from whitespace variants like `"Brain  MRI"` (double space) |
+| Browser canvas pre-check | Rejects obvious non-medical images before the network round-trip; improves UX latency |
+| FastAPI + React/Vite SPA | Vite provides fast HMR in development; production build served directly by FastAPI — no separate server |
+| Grayscale 128×128 for MedicalCNN | Unified representation for both MRI and CXR modalities |
 | cv2 INTER_AREA downscaling | Best quality for image size reduction; identical in preprocessing and inference |
 | Stratified partitioning | Class proportions balanced across all 3 clients and global test set |
 | Federated privacy | Raw images never leave client devices — only model weights are shared |
 | UUID filenames for saved images | No timestamp = no patient metadata leakage through filename |
-| Dual-mode scan type selector | Prevents cross-modality false positives at inference time |
-| Chart height set before Chart.js init | Avoids the ResizeObserver feedback loop that caused endless page scrolling |
-| `overflow: hidden` + explicit height on chart container | Prevents `flex: 1` from inflating the card beyond the viewport |
-| Continuous server mode | Enables real-world always-on deployment without restarting |
+| Audit log for gate events | Full observability: every SCAN_GATE_PASS / REJECT event is persisted with confidence and timestamp |
+| Heuristic fallback in ScanGate | Server never hard-crashes on a missing `scan_gate.pth`; degrades gracefully to pixel heuristics |
 | Per-round `.pth` checkpoints | Rollback possible if a round degrades accuracy |
 | `train_sim.py` simulation mode | Single-process FedAvg — identical math, no network/Ray; ideal for continued training |
 | RapidOCR (PP-OCRv3, ONNX) | Lightweight OCR without full PaddlePaddle install; gracefully degrades if absent |
-| Server checkpoint resume | `get_model()` loads `global_model.pth` on API startup — restarting never resets training |
+| CIFAR-10 for non-medical training data | Auto-downloaded; provides diverse everyday objects; deliberately excludes airplane/truck (ambiguous with radiology screenshots) |
 
 ---
 
-## Notes-1
+## Notes
 
-- Training runs on **CPU only** — no GPU required; each FL round takes ~7–10 minutes
+- Training runs on **CPU only** by default — no GPU required; each FL round takes ~7–10 minutes
 - `PYTHONIOENCODING=utf-8` is required on Windows to avoid cp1252 encoding errors with Flower's log output
 - The pneumonia dataset folder has a typo (`pneomonia_classification`) — intentional; matches the extracted folder name from Kaggle
 - The best known checkpoint is `global_model.pth` at **91.73%** accuracy, produced by 3 continuation rounds of `train_sim.py` from the Round 5 FL base
 - OCR is fully optional — the dashboard degrades gracefully and shows an install hint when `rapidocr-onnxruntime` is not present
+- `scan_gate.pth` is required for full gate functionality but is not strictly required to start the server — if missing, the backend logs a warning and falls back to heuristics
+- CIFAR-10 is downloaded automatically on the first `train_gate.py` run (~163 MB); cached in `data/cifar10_cache/` for subsequent runs
+- The ScanGate keeps RGB colour information at inference time — this is intentional; colour is the primary signal used to reject non-medical photos

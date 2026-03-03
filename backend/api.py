@@ -110,6 +110,7 @@ from report_generator import (
     compute_gradcam,
     compute_mc_uncertainty,
 )
+from scan_classifier import get_scan_gate
 
 from dataset import CLASS_NAMES, NUM_CLASSES
 
@@ -835,10 +836,25 @@ async def ocr_check(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not decode image: {exc}")
 
+    # ── STEP 1: ScanGate — ML + heuristic scan-type classifier ────────────────
+    # Runs before OCR and before any modality-specific logic.
+    # Rejects non-medical images and wrong modality uploads immediately.
+    _gate = get_scan_gate()
+    _gate_result = _gate.check(pil_img, scan_type)
+    if not _gate_result.allowed:
+        return {
+            "allowed": False,
+            "is_xray": False,
+            "scan_type_detected": _gate_result.label,
+            "confidence": round(_gate_result.confidence, 4),
+            "keywords_found": [],
+            "message": _gate_result.rejection_reason,
+            "error_code": "OCR_SCAN_REJECTED",
+        }
+
     if scan_type == "Chest X-Ray":
-        # ── VISUAL CHECK FIRST: reject colorful images immediately ────────────
-        # This catches strawberries, product photos, selfies etc. BEFORE OCR runs.
-        # Even if OCR finds X-ray keywords in random text, colorful images are rejected.
+        # ── VISUAL CHECK: secondary grayscale gate after ScanGate ─────────────
+        # Catches colourful images the gate may have passed at lower confidence.
         if not _is_likely_medical_scan(pil_img):
             return {
                 "allowed": False,
@@ -1059,10 +1075,40 @@ async def predict(
     _ocr_scan_validation: dict = {}
     _client_ip = request.client.host if request.client else "unknown"
 
+    # ── STEP 1: ScanGate — ML + heuristic scan-type classifier ────────────────
+    # First line of defence: runs before OCR and modality-specific logic.
+    _gate = get_scan_gate()
+    _gate_result = _gate.check(pil_img, scan_type)
+    if not _gate_result.allowed:
+        _audit_logger.warning(
+            "SCAN_GATE_REJECT ip=%s file=%s label=%s confidence=%.2f heuristics=%s",
+            _client_ip,
+            image.filename or "unknown",
+            _gate_result.label,
+            _gate_result.confidence,
+            _gate_result.used_heuristics,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": _gate_result.rejection_reason,
+                "error_code": "OCR_SCAN_REJECTED",
+                "scan_type_detected": _gate_result.label,
+                "keywords_found": [],
+                "ocr_confidence": round(_gate_result.confidence, 4),
+            },
+        )
+    _audit_logger.info(
+        "SCAN_GATE_PASS ip=%s file=%s label=%s confidence=%.2f elapsed_ms=%.1f",
+        _client_ip,
+        image.filename or "unknown",
+        _gate_result.label,
+        _gate_result.confidence,
+        _gate_result.elapsed_ms,
+    )
+
     if scan_type == "Chest X-Ray":
-        # ── VISUAL CHECK FIRST: reject colorful images immediately ────────────
-        # This catches strawberries, product photos, selfies etc. BEFORE OCR runs.
-        # Even if OCR finds X-ray keywords in random text, colorful images are rejected.
+        # ── VISUAL CHECK: secondary grayscale gate after ScanGate ─────────────
         if not medical_plausible:
             _audit_logger.warning(
                 "VISUAL_CHECK_REJECT ip=%s file=%s reason=colorful_image",

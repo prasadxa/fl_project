@@ -441,6 +441,88 @@ Block 3:  Conv2d(64→128) + BatchNorm + ReLU + MaxPool  →  16×16
 
 ## How to Run
 
+### Quick Start *(new laptop / first run)*
+
+Everything you need to go from a fresh clone to a running app — copy and paste in order.
+
+#### macOS / Linux
+
+```bash
+# 1. Clone and enter the project
+git clone https://github.com/prasadxa/fl_project
+cd fl_project
+
+# 2. Install Python dependencies
+pip install -r requirements.txt
+
+# 3. Install and build the frontend
+cd frontend && npm install && npm run build && cd ..
+
+# 4. Start the backend (serves the app at http://127.0.0.1:8000)
+PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# 1. Clone and enter the project
+git clone https://github.com/prasadxa/fl_project
+cd fl_project
+
+# 2. Install Python dependencies
+pip install -r requirements.txt
+
+# 3. Install and build the frontend
+cd frontend; npm install; npm run build; cd ..
+
+# 4. Start the backend (serves the app at http://127.0.0.1:8000)
+$env:PYTHONIOENCODING = 'utf-8'
+uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Then open **http://127.0.0.1:8000** in your browser. That's it — no retraining needed, model weights are included in the repo.
+
+> **Note:** Steps 1–3 are one-time setup. After that, only step 4 is needed to start the app.
+
+---
+
+### Development Mode *(hot-reload for frontend changes)*
+
+Run the backend and frontend in two separate terminals for live UI editing:
+
+#### macOS / Linux
+
+```bash
+# Terminal 1 — Backend (API)
+cd fl_project
+PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2 — Frontend (Vite dev server with hot-reload)
+cd fl_project/frontend
+npm run dev
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# Terminal 1 — Backend (API)
+cd fl_project
+$env:PYTHONIOENCODING = 'utf-8'
+uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2 — Frontend (Vite dev server with hot-reload)
+cd fl_project/frontend
+npm run dev
+```
+
+| Service | URL |
+|---|---|
+| Frontend (Vite, hot-reload) | http://localhost:5173 |
+| Backend API | http://127.0.0.1:8000 |
+| Swagger UI | http://127.0.0.1:8000/api/docs |
+
+---
+
 ### Prerequisites
 
 - **Python** ≥ 3.10

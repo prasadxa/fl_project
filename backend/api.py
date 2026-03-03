@@ -83,7 +83,7 @@ import torch
 import torch.nn.functional as F
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -317,7 +317,7 @@ def get_model() -> Optional[MedicalCNN]:
         if MODEL_PATH.exists():
             try:
                 m = MedicalCNN(num_classes=NUM_CLASSES)
-                m.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+                m.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=True))
                 m.eval()
                 _model = m
                 print(f"[API] ✓ Model loaded from {MODEL_PATH.name}")
@@ -1661,7 +1661,7 @@ async def pdf_report(
     clinician_id: str = Form(""),
     # ── model metadata ────────────────────────────────────────────────────────
     fl_round: int = Form(0),
-    model_version: str = Form("global_model.pth"),
+    report_model_version: str = Form("global_model.pth"),
     # ── uncertainty (optional — populated by /api/predict if mc_dropout=True) ─
     mc_entropy: float = Form(0.0),
     mc_std_conf: float = Form(0.0),
@@ -1770,7 +1770,7 @@ async def pdf_report(
             uncertainty_label=mc_label or ("N/A" if mc_samples == 0 else ""),
         ),
         fl_round=fl_round,
-        model_version=model_version,
+        model_version=report_model_version,
         server_timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
         clinician_name=clinician_name,
         clinician_id=clinician_id,
@@ -2220,10 +2220,21 @@ def admin_sessions(limit: int = 50, offset: int = 0):
     return {"sessions": get_db().list_sessions(limit=min(limit, 500), offset=offset)}
 
 
-# ── mount frontend static files (must be last — acts as a fallback) ───────────
-if FRONTEND_DIR.exists():
-    app.mount(
-        "/",
-        StaticFiles(directory=str(FRONTEND_DIR), html=True),
-        name="frontend",
+# ── SPA + static file handler (must be last) ──────────────────────────────────
+# FastAPI routes take priority over app.mount(), so this catch-all serves both:
+#   • real files (assets/*, favicon.svg, …) → FileResponse from dist/
+#   • React Router paths (/classify, /history, …) → index.html
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa(full_path: str):
+    """Serve dist files when they exist; fall back to index.html for React Router."""
+    if FRONTEND_DIR.exists():
+        candidate = FRONTEND_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        index_file = FRONTEND_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+    return JSONResponse(
+        {"detail": "Frontend not built. Run: cd frontend && npm run build"},
+        status_code=404,
     )

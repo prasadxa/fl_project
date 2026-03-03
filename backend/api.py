@@ -110,6 +110,7 @@ from report_generator import (
     compute_gradcam,
     compute_mc_uncertainty,
 )
+from scan_classifier import CONFIDENCE_THRESHOLD as GATE_THRESHOLD
 from scan_classifier import get_scan_gate
 
 from dataset import CLASS_NAMES, NUM_CLASSES
@@ -913,52 +914,42 @@ async def ocr_check(
                 "error_code": "OCR_SCAN_REJECTED",
             }
         else:
-            # OCR inconclusive — STRICT MODE: reject unless we can positively
-            # confirm this is an X-ray. Random grayscale images should not pass.
-            # Only images with X-ray markers (is_xray=True) are allowed through.
-            # Note: visual check already passed above, so image is grayscale.
-            # Even so, reject when OCR cannot confirm X-ray markers.
+            # OCR inconclusive (no text found in image) — defer to ScanGate.
+            # Clean clinical dataset X-rays have no embedded text so OCR is
+            # always inconclusive for them. ScanGate already confirmed the
+            # modality before we reached this point, so trust it.
+            gate_conf = _gate_result.confidence if _gate_result else 0.0
             return {
-                "allowed": False,
+                "allowed": True,
                 "is_xray": None,
-                "scan_type_detected": "unknown",
-                "confidence": 0.0,
+                "scan_type_detected": "xray",
+                "confidence": round(gate_conf, 4),
                 "keywords_found": [],
                 "message": (
-                    "Cannot verify this image as a chest X-ray. "
-                    "No X-ray markers were detected. Please upload a clinical "
-                    "chest X-ray image with standard radiographic annotations, "
-                    "or ensure the image is from a medical imaging source."
+                    f"Verified as chest X-ray by scan classifier "
+                    f"({gate_conf:.0%} confidence). "
+                    "No OCR text markers present — image appears to be a clean scan."
                 ),
-                "error_code": "OCR_XRAY_UNCONFIRMED",
+                "error_code": "",
             }
     else:
-        # Brain MRI — visual check first (catches perfume bottles, product photos,
-        # selfies etc. regardless of whether OCR finds text), then OCR for
-        # explicit wrong-modality rejection (non-medical watermarks, CT markers).
-        if not _is_likely_medical_scan(pil_img):
-            return {
-                "allowed": False,
-                "is_xray": False,
-                "scan_type_detected": "non_medical",
-                "confidence": 0.85,
-                "keywords_found": [],
-                "message": (
-                    "This image does not appear to be a medical scan. "
-                    "Real MRI scans are grayscale — this image contains colour "
-                    "content inconsistent with MRI imaging. "
-                    "Please upload an original brain MRI image (JPEG / PNG / DICOM)."
-                ),
-                "error_code": "OCR_SCAN_REJECTED",
-            }
+        # Brain MRI — ScanGate already confirmed the modality above.
+        # Only run OCR to catch explicit wrong-modality text (non-medical
+        # watermarks, CT markers). Inconclusive / no-text results pass through
+        # since clean MRI datasets have no embedded text at all.
+        gate_conf = _gate_result.confidence if _gate_result else 0.0
         if not is_ocr_available():
             return {
                 "allowed": True,
                 "is_xray": None,
-                "scan_type_detected": "unknown",
-                "confidence": 0.0,
+                "scan_type_detected": "mri",
+                "confidence": round(gate_conf, 4),
                 "keywords_found": [],
-                "message": "OCR not available — image passed visual check, proceeding.",
+                "message": (
+                    f"Verified as Brain MRI by scan classifier "
+                    f"({gate_conf:.0%} confidence). "
+                    "OCR not available — proceeding."
+                ),
                 "error_code": "",
             }
         check = is_xray_scan(pil_img)
@@ -974,11 +965,14 @@ async def ocr_check(
             }
         return {
             "allowed": True,
-            "is_xray": check.is_xray,
-            "scan_type_detected": check.scan_type_detected,
-            "confidence": round(check.confidence, 4),
+            "is_xray": None,
+            "scan_type_detected": "mri",
+            "confidence": round(gate_conf, 4),
             "keywords_found": check.keywords_found,
-            "message": "Brain MRI gate passed.",
+            "message": (
+                f"Verified as Brain MRI by scan classifier "
+                f"({gate_conf:.0%} confidence)."
+            ),
             "error_code": "",
         }
 
@@ -1200,34 +1194,27 @@ async def predict(
             )
 
         else:
-            # STRICT MODE: OCR inconclusive means we cannot confirm this is an X-ray.
-            # Reject to prevent random images from passing through.
-            _audit_logger.warning(
-                "OCR_GATE_INCONCLUSIVE_REJECT ip=%s file=%s ocr_ran=%s",
+            # OCR inconclusive (no text found in image) — defer to ScanGate.
+            # Clean clinical dataset X-rays have no embedded text so OCR is
+            # always inconclusive for them. ScanGate already confirmed the
+            # modality before we reached this point, so trust it and proceed.
+            gate_conf = _gate_result.confidence if _gate_result else 0.0
+            _audit_logger.info(
+                "OCR_INCONCLUSIVE_GATE_PASS ip=%s file=%s gate_conf=%.2f",
                 _client_ip,
                 image.filename or "unknown",
-                _xray_check.ocr_ran,
+                gate_conf,
             )
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "message": (
-                        "Cannot verify this image as a chest X-ray. "
-                        "No X-ray markers were detected. Please upload a clinical "
-                        "chest X-ray image with standard radiographic annotations, "
-                        "or ensure the image is from a medical imaging source."
-                    ),
-                    "error_code": "OCR_XRAY_UNCONFIRMED",
-                    "scan_type_detected": "unknown",
-                    "keywords_found": [],
-                    "ocr_confidence": 0.0,
-                },
-            )
+            _ocr_scan_validation["inconclusive_gate_passed"] = True
+            _ocr_scan_validation["gate_confidence"] = round(gate_conf, 4)
 
     else:
-        # ── PERMISSIVE (Brain MRI and any future modality) ────────────────────
-        # Only hard-reject images that OCR positively flags as non-medical or CT.
-        # Inconclusive / no-text results pass through (clean MRI datasets have no text).
+        # ── Brain MRI (and any future modality) ───────────────────────────────
+        # ScanGate already confirmed the modality above.
+        # Only run OCR to hard-reject explicit non-medical/CT text markers.
+        # Inconclusive / no-text results pass through — clean MRI datasets
+        # have no embedded text at all.
+        gate_conf = _gate_result.confidence if _gate_result else 0.0
         if is_ocr_available():
             _xray_check_mri: XrayScanResult = is_xray_scan(pil_img)
             _ocr_scan_validation = {
@@ -1237,6 +1224,7 @@ async def predict(
                 "keywords_found": _xray_check_mri.keywords_found,
                 "ocr_ran": _xray_check_mri.ocr_ran,
                 "gate_mode": "permissive",
+                "gate_ml_confidence": round(gate_conf, 4),
             }
             if (
                 _xray_check_mri.is_xray is False
@@ -1260,6 +1248,12 @@ async def predict(
                         "ocr_confidence": round(_xray_check_mri.confidence, 4),
                     },
                 )
+        else:
+            _ocr_scan_validation = {
+                "gate_mode": "permissive",
+                "gate_ml_confidence": round(gate_conf, 4),
+                "ocr_ran": False,
+            }
 
     # ── final plausibility enforcement ───────────────────────────────────────
     # For Brain MRI: always apply the visual heuristic.

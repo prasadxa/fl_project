@@ -2,21 +2,21 @@
 # Install: pip install -r requirements.txt
 
 # Deep learning
-torch>=2.7.0
-torchvision>=0.22.0
+torch>=2.5.0
+torchvision>=0.20.0
 
 # Computer vision
-opencv-python>=4.12.0
-Pillow>=12.1.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
 
 # Data & ML utilities
-numpy>=2.2.0
-scikit-learn>=1.8.0
-pandas>=3.0.0
+numpy>=1.26.0
+scikit-learn>=1.5.0
+pandas>=2.0.0
 openpyxl>=3.1.0
 
 # Visualisation
-matplotlib>=3.10.0
+matplotlib>=3.8.0
 seaborn>=0.13.0
 
 # OCR — text extraction from medical scan images
@@ -28,4 +28,4 @@ uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 
 # PDF report generation
-reportlab>=4.4.0
+reportlab>=4.0.0

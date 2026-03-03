@@ -107,18 +107,16 @@ export default function Admin() {
                     <td className="px-5 py-3 text-stone-500 whitespace-nowrap">
                       {fb.timestamp ? new Date(fb.timestamp).toLocaleString() : '—'}
                     </td>
-                    <td className="px-5 py-3 font-medium text-stone-700">{fb.predicted_label || fb.predicted_class || '—'}</td>
-                    <td className="px-5 py-3 text-stone-600">{fb.corrected_label || fb.confirmed_label || '—'}</td>
+                    <td className="px-5 py-3 font-medium text-stone-700">{fb.ai_predicted_key || '—'}</td>
+                    <td className="px-5 py-3 text-stone-600">{fb.chosen_label || fb.chosen_key || '—'}</td>
                     <td className="px-5 py-3">
-                      {fb.doctor_agrees != null ? (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          fb.doctor_agrees
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-red-50 text-red-700 border border-red-200'
-                        }`}>
-                          {fb.doctor_agrees ? 'Yes' : 'No'}
-                        </span>
-                      ) : '—'}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        !fb.overridden
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {fb.overridden ? 'No' : 'Yes'}
+                      </span>
                     </td>
                   </tr>
                 ))}

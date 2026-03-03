@@ -13,9 +13,9 @@ Run:
 
 from __future__ import annotations
 
+import datetime
 import sys
 import uuid
-import datetime
 from pathlib import Path
 
 import cv2
@@ -28,14 +28,22 @@ from torchvision import transforms
 
 # â”€â”€ project imports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 sys.path.insert(0, str(Path(__file__).parent))
-from dataset import CLASS_NAMES, NUM_CLASSES
-from model import MedicalCNN
 from anonymizer import strip_metadata_and_save
-from ocr_reader import extract_text, filter_medical_text, format_for_report, is_ocr_available, ocr_unavailable_reason
+from model import MedicalCNN
+from ocr_reader import (
+    extract_text,
+    filter_medical_text,
+    format_for_report,
+    is_ocr_available,
+    is_xray_scan,
+    ocr_unavailable_reason,
+)
+
+from dataset import CLASS_NAMES, NUM_CLASSES
 
 # â”€â”€ paths â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-PROJ_ROOT   = Path(__file__).parent.parent
-MODEL_PATH  = PROJ_ROOT / "models" / "global_model.pth"
+PROJ_ROOT = Path(__file__).parent.parent
+MODEL_PATH = PROJ_ROOT / "models" / "global_model.pth"
 COLLECT_DIR = PROJ_ROOT / "data" / "new_collected_data"
 
 # â”€â”€ scan-type configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -65,21 +73,21 @@ SCAN_MODES = {
 
 # Full display names and risk colours for all 6 classes
 SHORT_NAMES = {
-    "glioma":      "Glioma (Brain Tumor)",
-    "meningioma":  "Meningioma (Brain Tumor)",
-    "notumor":     "No Tumor Detected",
-    "pituitary":   "Pituitary Tumor",
-    "normal":      "Normal / Healthy (CXR)",
-    "pneumonia":   "Pneumonia Detected (CXR)",
+    "glioma": "Glioma (Brain Tumor)",
+    "meningioma": "Meningioma (Brain Tumor)",
+    "notumor": "No Tumor Detected",
+    "pituitary": "Pituitary Tumor",
+    "normal": "Normal / Healthy (CXR)",
+    "pneumonia": "Pneumonia Detected (CXR)",
 }
 
 RISK_COLOURS = {
-    "glioma":      "#e74c3c",
-    "meningioma":  "#e67e22",
-    "notumor":     "#27ae60",
-    "pituitary":   "#e67e22",
-    "normal":      "#27ae60",
-    "pneumonia":   "#e74c3c",
+    "glioma": "#e74c3c",
+    "meningioma": "#e67e22",
+    "notumor": "#27ae60",
+    "pituitary": "#e67e22",
+    "normal": "#27ae60",
+    "pneumonia": "#e74c3c",
 }
 
 # â”€â”€ page config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -91,7 +99,8 @@ st.set_page_config(
 )
 
 # â”€â”€ custom CSS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-st.markdown("""
+st.markdown(
+    """
 <style>
     .tecnomate-header { font-size:2.6rem; font-weight:800; color:#1a73e8; }
     .sub-header       { font-size:1.05rem; color:#555; margin-top:-12px; }
@@ -103,7 +112,9 @@ st.markdown("""
     .mode-badge       { background:#cce5ff; color:#004085; padding:4px 10px;
                         border-radius:20px; font-size:0.85rem; font-weight:600; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # â”€â”€ model loader (cached â€” loads once into 16 GB RAM, never reloaded) â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -118,28 +129,31 @@ def load_model() -> MedicalCNN | None:
 
 
 # â”€â”€ image preprocessing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-_INFER_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5]),
-])
+_INFER_TRANSFORM = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+    ]
+)
+
 
 def prepare_any_image_for_model(pil_img: Image.Image) -> torch.Tensor:
     """
     Converts any uploaded image to the exact (1,1,128,128) tensor the model
     expects, mirroring the cv2 INTER_AREA pipeline used during training.
     """
-    img_np  = np.array(pil_img.convert("RGB"))
+    img_np = np.array(pil_img.convert("RGB"))
     img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-    gray    = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     resized = cv2.resize(gray, (128, 128), interpolation=cv2.INTER_AREA)
     pil_gray = Image.fromarray(resized, mode="L")
-    return _INFER_TRANSFORM(pil_gray).unsqueeze(0)   # (1,1,128,128)
+    return _INFER_TRANSFORM(pil_gray).unsqueeze(0)  # (1,1,128,128)
 
 
 @torch.no_grad()
 def run_inference(model: MedicalCNN, tensor: torch.Tensor):
     probs = F.softmax(model(tensor), dim=1).squeeze().numpy()
-    pred  = int(np.argmax(probs))
+    pred = int(np.argmax(probs))
     return pred, probs
 
 
@@ -195,7 +209,7 @@ with st.sidebar:
         options=list(SCAN_MODES.keys()),
         index=0,
         help="Select the type of scan you are uploading. "
-             "The AI will only show predictions relevant to that scan type.",
+        "The AI will only show predictions relevant to that scan type.",
     )
     mode_cfg = SCAN_MODES[scan_type]
     st.markdown(
@@ -213,15 +227,17 @@ with st.sidebar:
     st.markdown(f"- Training: `FedAvg FL`")
     st.markdown(f"- Images used: `13,056`")
     st.markdown("---")
-    st.markdown('<span class="privacy-badge">HIPAA-Style Privacy Mode ON</span>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<span class="privacy-badge">HIPAA-Style Privacy Mode ON</span>',
+        unsafe_allow_html=True,
+    )
 
 
 # â”€â”€ main header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 st.markdown('<p class="tecnomate-header">ðŸ¥ Tecnomate</p>', unsafe_allow_html=True)
 st.markdown(
     f'<p class="sub-header">Privacy-Preserving Federated Medical Image Diagnosis '
-    f'â€” {mode_cfg["icon"]} <strong>{scan_type}</strong> mode</p>',
+    f"â€” {mode_cfg['icon']} <strong>{scan_type}</strong> mode</p>",
     unsafe_allow_html=True,
 )
 st.markdown("---")
@@ -229,8 +245,10 @@ st.markdown("---")
 # â”€â”€ load model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model = load_model()
 if model is None:
-    st.error("Global model not found at `models/global_model.pth`.  "
-             "Please complete federated training first.")
+    st.error(
+        "Global model not found at `models/global_model.pth`.  "
+        "Please complete federated training first."
+    )
     st.stop()
 
 # â”€â”€ image upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -241,7 +259,7 @@ with col_upload:
     uploaded = st.file_uploader(
         f"Select a {scan_type} image",
         type=["jpg", "jpeg", "png"],
-        key=scan_type,   # resets uploader when user switches scan type
+        key=scan_type,  # resets uploader when user switches scan type
     )
     if uploaded:
         img_pil = Image.open(uploaded)
@@ -249,200 +267,239 @@ with col_upload:
 
 # â”€â”€ inference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if uploaded:
-    tensor         = prepare_any_image_for_model(img_pil)
-    raw_pred, probs = run_inference(model, tensor)
-
-    # --- OCR: run on the original full-resolution image, not the 128x128 tensor ---
-    _ocr_result = extract_text(img_pil) if is_ocr_available() else None
-    _ocr_text   = format_for_report(_ocr_result) if _ocr_result is not None else ""
-
-    # --- restrict prediction to valid indices for this scan type ---
-    valid_indices  = mode_cfg["indices"]
-    valid_probs    = {i: float(probs[i]) for i in valid_indices}
-    pred_idx       = max(valid_probs, key=valid_probs.get)
-    pred_conf      = valid_probs[pred_idx] * 100
-    pred_class_key = CLASS_NAMES[pred_idx]
-    pred_label     = mode_cfg["labels"][pred_idx]
-
-    with col_result:
-        st.subheader("AI Diagnostic Result")
-        colour   = RISK_COLOURS[pred_class_key]
-        top_vals = sorted(valid_probs.values(), reverse=True)
-        margin   = (top_vals[0] - top_vals[1]) * 100 if len(top_vals) > 1 else 100.0
-        low_conf = pred_conf < 60.0
-
-        st.markdown(
-            f'<div class="result-box" style="border-color:{colour};">'
-            f'<h3 style="color:{colour}">{pred_label}</h3>'
-            f'<p style="font-size:1.1rem">Confidence: <strong>{pred_conf:.1f}%</strong></p>'
-            f'<p style="font-size:0.9rem; color:#888">Margin over 2nd class: {margin:.1f}%</p>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        if low_conf:
-            st.warning(
-                f"âš ï¸ Low confidence ({pred_conf:.1f}%). "
-                "Please ensure the image is the correct scan type and verify manually."
+    # --- OCR-based X-ray gate (Chest X-Ray mode only) ---
+    # Reject only when OCR positively confirms a non-X-ray image.
+    # Inconclusive OCR (no text / ambiguous) is allowed to avoid blocking valid scans.
+    _xray_gate_blocked = False
+    _xray_gate_result = None
+    if scan_type == "Chest X-Ray" and is_ocr_available():
+        _xray_gate_result = is_xray_scan(img_pil)
+        if _xray_gate_result.is_xray is False:
+            _xray_gate_blocked = True
+            st.error(
+                _xray_gate_result.rejection_reason
+                or "Upload rejected: this image does not appear to be a valid chest X-ray."
             )
-
-        # probability bar chart â€” only show relevant classes for this scan type
-        st.markdown("**Class Probability Distribution**")
-        prob_dict = {mode_cfg["labels"][i]: valid_probs[i] for i in valid_indices}
-        st.bar_chart(prob_dict)
-
-    # â”€â”€ doctor verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    st.markdown("---")
-    st.subheader("Doctor Verification")
-    st.markdown(
-        "Review the AI prediction and confirm or override. "
-        "Your verified label improves the federated model in the next training round."
-    )
-
-    col_confirm, col_override = st.columns(2)
-
-    with col_confirm:
-        confirm_btn = st.button("âœ… Confirm Diagnosis", type="primary", use_container_width=True)
-
-    with col_override:
-        # Override dropdown shows ONLY the classes valid for the selected scan type
-        override_options = mode_cfg["class_keys"]
-        override_labels  = [SHORT_NAMES[k] for k in override_options]
-        default_override = override_options.index(pred_class_key) if pred_class_key in override_options else 0
-        selected_override_label = st.selectbox(
-            "Select correct class (if overriding)",
-            options=override_labels,
-            index=default_override,
-        )
-        correct_class_key = override_options[override_labels.index(selected_override_label)]
-        override_btn = st.button("âœï¸ Override Diagnosis", use_container_width=True)
-
-    # â”€â”€ handle confirmation / override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    confirmed_class_key = None
-
-    if confirm_btn:
-        confirmed_class_key = pred_class_key
-        st.success(f"Diagnosis confirmed: **{pred_label}**")
-
-    elif override_btn:
-        confirmed_class_key = correct_class_key
-        confirmed_label     = SHORT_NAMES[correct_class_key]
-        if correct_class_key == pred_class_key:
-            st.info(f"Override matches prediction â€” saved as: **{confirmed_label}**")
-        else:
-            st.warning(
-                f"AI predicted **{pred_label}** â€” "
-                f"Doctor overrode to **{confirmed_label}**"
-            )
-
-    if confirmed_class_key is not None:
-        # Generate a unique filename using uuid (no timestamps = no patient metadata leakage)
-        unique_name = f"{confirmed_class_key}_{uuid.uuid4().hex}.jpg"
-        save_path   = COLLECT_DIR / confirmed_class_key / unique_name
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # strip_metadata_and_save takes a PIL Image directly
-        strip_metadata_and_save(img_pil, save_path)
-
-        count = sum(1 for _ in (COLLECT_DIR / confirmed_class_key).glob("*.jpg"))
-        st.markdown(
-            f'<div class="disclaimer">'
-            f'<strong>Patient Data Anonymized and Secured</strong><br>'
-            f'Image saved as <code>{unique_name}</code><br>'
-            f'directory: <code>data/new_collected_data/{confirmed_class_key}/</code><br>'
-            f'Total images awaiting next FL round in this class: <strong>{count}</strong>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Downloadable diagnostic report
-        report_txt = build_report(
-            uploaded.name,
-            pred_label,
-            SHORT_NAMES.get(confirmed_class_key, confirmed_class_key),
-            ocr_text=_ocr_text,
-        )
-        st.download_button(
-            label="ðŸ“„ Download Diagnostic Report",
-            data=report_txt,
-            file_name=f"tecnomate_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-        )
-
-        # Clear session state so the next upload starts fresh
-        if "uploader" in st.session_state:
-            del st.session_state["uploader"]
-
-    # â”€â”€ new data queue status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    st.markdown("---")
-    st.subheader("New Data Collection Queue")
-    import pandas as pd
-    total_new = 0
-    rows = []
-    for cls_key in CLASS_NAMES:
-        cls_dir = COLLECT_DIR / cls_key
-        n = len(list(cls_dir.glob("*.jpg"))) + len(list(cls_dir.glob("*.png"))) if cls_dir.exists() else 0
-        total_new += n
-        rows.append({"Class": SHORT_NAMES[cls_key], "Pending Images": n})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    if total_new > 0:
-        st.info(f"**{total_new}** new image(s) queued for the next federated training round.")
-    else:
-        st.success("No new images pending — model is up to date.")
-
-    # ── OCR text extraction ────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("📝 Text Extraction (OCR)")
-    st.caption(
-        "Reads annotations, measurements, labels, and report text "
-        "embedded directly in the scan image. Powered by RapidOCR (PP-OCRv3)."
-    )
-
-    if not is_ocr_available():
-        st.info(
-            "**OCR is not available.**  Install the runtime to enable text extraction:\n\n"
-            "```\npip install rapidocr-onnxruntime\n```\n\n"
-            f"_{ocr_unavailable_reason()}_"
-        )
-    elif _ocr_result is None:
-        st.info("Upload an image above to extract any embedded text.")
-
-    elif _ocr_result.error:
-        st.warning(f"OCR error: {_ocr_result.error}")
-
-    elif not _ocr_result.found_text:
-        st.success("No text detected in this image.")
-        st.caption(f"OCR inference: {_ocr_result.elapsed_ms:.0f} ms")
-
-    else:
-        st.caption(_ocr_result.summary() + f"  |  {_ocr_result.elapsed_ms:.0f} ms")
-
-        tab_all, tab_medical = st.tabs(["All Detected Text", "Medical Keywords Only"])
-
-        with tab_all:
-            for ln in _ocr_result.lines:
-                col_txt, col_conf = st.columns([5, 1])
-                with col_txt:
-                    st.write(ln.text)
-                with col_conf:
-                    if ln.confidence >= 0.80:
-                        colour = "green"
-                    elif ln.confidence >= 0.60:
-                        colour = "orange"
-                    else:
-                        colour = "red"
-                    st.markdown(
-                        f'<span style="color:{colour};font-size:0.85rem">'
-                        f'{ln.confidence_pct}</span>',
-                        unsafe_allow_html=True,
-                    )
-
-        with tab_medical:
-            medical = filter_medical_text(_ocr_result)
-            if medical.found_text:
-                for ln in medical.lines:
-                    st.markdown(f"- **{ln.text}** &nbsp; _{ln.confidence_pct}_")
-            else:
-                st.info(
-                    "No recognised medical keywords found in the detected text.\n\n"
-                    "Switch to **All Detected Text** to see everything extracted."
+            if _xray_gate_result.keywords_found:
+                st.caption(
+                    "Detected markers: "
+                    + ", ".join(_xray_gate_result.keywords_found[:5])
                 )
+
+    if not _xray_gate_blocked:
+        tensor = prepare_any_image_for_model(img_pil)
+        raw_pred, probs = run_inference(model, tensor)
+
+        # --- OCR: run on the original full-resolution image, not the 128x128 tensor ---
+        _ocr_result = extract_text(img_pil) if is_ocr_available() else None
+        _ocr_text = format_for_report(_ocr_result) if _ocr_result is not None else ""
+
+        # --- restrict prediction to valid indices for this scan type ---
+        valid_indices = mode_cfg["indices"]
+        valid_probs = {i: float(probs[i]) for i in valid_indices}
+        pred_idx = max(valid_probs, key=valid_probs.get)
+        pred_conf = valid_probs[pred_idx] * 100
+        pred_class_key = CLASS_NAMES[pred_idx]
+        pred_label = mode_cfg["labels"][pred_idx]
+
+        with col_result:
+            st.subheader("AI Diagnostic Result")
+            colour = RISK_COLOURS[pred_class_key]
+            top_vals = sorted(valid_probs.values(), reverse=True)
+            margin = (top_vals[0] - top_vals[1]) * 100 if len(top_vals) > 1 else 100.0
+            low_conf = pred_conf < 60.0
+
+            st.markdown(
+                f'<div class="result-box" style="border-color:{colour};">'
+                f'<h3 style="color:{colour}">{pred_label}</h3>'
+                f'<p style="font-size:1.1rem">Confidence: <strong>{pred_conf:.1f}%</strong></p>'
+                f'<p style="font-size:0.9rem; color:#888">Margin over 2nd class: {margin:.1f}%</p>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            if low_conf:
+                st.warning(
+                    f"⚠️ Low confidence ({pred_conf:.1f}%). "
+                    "Please ensure the image is the correct scan type and verify manually."
+                )
+
+            # probability bar chart — only show relevant classes for this scan type
+            st.markdown("**Class Probability Distribution**")
+            prob_dict = {mode_cfg["labels"][i]: valid_probs[i] for i in valid_indices}
+            st.bar_chart(prob_dict)
+
+        # ── doctor verification ────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("Doctor Verification")
+        st.markdown(
+            "Review the AI prediction and confirm or override. "
+            "Your verified label improves the federated model in the next training round."
+        )
+
+        col_confirm, col_override = st.columns(2)
+
+        with col_confirm:
+            confirm_btn = st.button(
+                "✅ Confirm Diagnosis", type="primary", use_container_width=True
+            )
+
+        with col_override:
+            # Override dropdown shows ONLY the classes valid for the selected scan type
+            override_options = mode_cfg["class_keys"]
+            override_labels = [SHORT_NAMES[k] for k in override_options]
+            default_override = (
+                override_options.index(pred_class_key)
+                if pred_class_key in override_options
+                else 0
+            )
+            selected_override_label = st.selectbox(
+                "Select correct class (if overriding)",
+                options=override_labels,
+                index=default_override,
+            )
+            correct_class_key = override_options[
+                override_labels.index(selected_override_label)
+            ]
+            override_btn = st.button("✏️ Override Diagnosis", use_container_width=True)
+
+        # ── handle confirmation / override ────────────────────────────────────────
+        confirmed_class_key = None
+
+        if confirm_btn:
+            confirmed_class_key = pred_class_key
+            st.success(f"Diagnosis confirmed: **{pred_label}**")
+
+        elif override_btn:
+            confirmed_class_key = correct_class_key
+            confirmed_label = SHORT_NAMES[correct_class_key]
+            if correct_class_key == pred_class_key:
+                st.info(
+                    f"Override matches prediction — saved as: **{confirmed_label}**"
+                )
+            else:
+                st.warning(
+                    f"AI predicted **{pred_label}** — "
+                    f"Doctor overrode to **{confirmed_label}**"
+                )
+
+        if confirmed_class_key is not None:
+            # Generate a unique filename using uuid (no timestamps = no patient metadata leakage)
+            unique_name = f"{confirmed_class_key}_{uuid.uuid4().hex}.jpg"
+            save_path = COLLECT_DIR / confirmed_class_key / unique_name
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # strip_metadata_and_save takes a PIL Image directly
+            strip_metadata_and_save(img_pil, save_path)
+
+            count = sum(1 for _ in (COLLECT_DIR / confirmed_class_key).glob("*.jpg"))
+            st.markdown(
+                f'<div class="disclaimer">'
+                f"<strong>Patient Data Anonymized and Secured</strong><br>"
+                f"Image saved as <code>{unique_name}</code><br>"
+                f"directory: <code>data/new_collected_data/{confirmed_class_key}/</code><br>"
+                f"Total images awaiting next FL round in this class: <strong>{count}</strong>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Downloadable diagnostic report
+            report_txt = build_report(
+                uploaded.name,
+                pred_label,
+                SHORT_NAMES.get(confirmed_class_key, confirmed_class_key),
+                ocr_text=_ocr_text,
+            )
+            st.download_button(
+                label="📄 Download Diagnostic Report",
+                data=report_txt,
+                file_name=f"tecnomate_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+            )
+
+            # Clear session state so the next upload starts fresh
+            if "uploader" in st.session_state:
+                del st.session_state["uploader"]
+
+        # ── new data queue status ──────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("New Data Collection Queue")
+        import pandas as pd
+
+        total_new = 0
+        rows = []
+        for cls_key in CLASS_NAMES:
+            cls_dir = COLLECT_DIR / cls_key
+            n = (
+                len(list(cls_dir.glob("*.jpg"))) + len(list(cls_dir.glob("*.png")))
+                if cls_dir.exists()
+                else 0
+            )
+            total_new += n
+            rows.append({"Class": SHORT_NAMES[cls_key], "Pending Images": n})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        if total_new > 0:
+            st.info(
+                f"**{total_new}** new image(s) queued for the next federated training round."
+            )
+        else:
+            st.success("No new images pending — model is up to date.")
+
+        # ── OCR text extraction ────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("📝 Text Extraction (OCR)")
+        st.caption(
+            "Reads annotations, measurements, labels, and report text "
+            "embedded directly in the scan image. Powered by RapidOCR (PP-OCRv3)."
+        )
+
+        if not is_ocr_available():
+            st.info(
+                "**OCR is not available.**  Install the runtime to enable text extraction:\n\n"
+                "```\npip install rapidocr-onnxruntime\n```\n\n"
+                f"_{ocr_unavailable_reason()}_"
+            )
+        elif _ocr_result is None:
+            st.info("Upload an image above to extract any embedded text.")
+
+        elif _ocr_result.error:
+            st.warning(f"OCR error: {_ocr_result.error}")
+
+        elif not _ocr_result.found_text:
+            st.success("No text detected in this image.")
+            st.caption(f"OCR inference: {_ocr_result.elapsed_ms:.0f} ms")
+
+        else:
+            st.caption(_ocr_result.summary() + f"  |  {_ocr_result.elapsed_ms:.0f} ms")
+
+            tab_all, tab_medical = st.tabs(
+                ["All Detected Text", "Medical Keywords Only"]
+            )
+
+            with tab_all:
+                for ln in _ocr_result.lines:
+                    col_txt, col_conf = st.columns([5, 1])
+                    with col_txt:
+                        st.write(ln.text)
+                    with col_conf:
+                        if ln.confidence >= 0.80:
+                            colour = "green"
+                        elif ln.confidence >= 0.60:
+                            colour = "orange"
+                        else:
+                            colour = "red"
+                        st.markdown(
+                            f'<span style="color:{colour};font-size:0.85rem">'
+                            f"{ln.confidence_pct}</span>",
+                            unsafe_allow_html=True,
+                        )
+
+            with tab_medical:
+                medical = filter_medical_text(_ocr_result)
+                if medical.found_text:
+                    for ln in medical.lines:
+                        st.markdown(f"- **{ln.text}** &nbsp; _{ln.confidence_pct}_")
+                else:
+                    st.info(
+                        "No recognised medical keywords found in the detected text.\n\n"
+                        "Switch to **All Detected Text** to see everything extracted."
+                    )

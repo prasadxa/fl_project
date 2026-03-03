@@ -1,0 +1,37 @@
+2026-03-03 15:10:30,301 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:40,175 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:40,930 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:41,441 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:41,944 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:42,428 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:42,952 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:43,287 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:43,491 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:10:43,826 WARNING OCR_GATE_INCONCLUSIVE ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:13:39,997 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:18:45,079 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:25:52,711 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:26:07,078 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:26:20,254 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:29:32,797 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:29:51,577 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=Blush Berry Bottle Shot.png selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:30:16,774 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:39:04,917 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:39:15,206 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20.jpeg ocr_ran=False
+2026-03-03 15:39:20,782 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:39:28,326 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:39:34,941 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.20 (1).jpeg ocr_ran=False
+2026-03-03 15:47:03,739 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg ocr_ran=False
+2026-03-03 15:47:15,539 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:47:20,302 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:54:30,350 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=Blush Berry Bottle Shot.png selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:54:34,627 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:56:33,813 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=Blush Berry Bottle Shot.png ocr_ran=True
+2026-03-03 15:56:44,383 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=Blush Berry Bottle Shot.png selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:57:17,585 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=WhatsApp Image 2026-02-28 at 17.20.19 (2).jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:59:10,976 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=IM-0001-0001.jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 15:59:17,428 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=IM-0003-0001.jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 16:11:46,102 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=IM-0005-0001.jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 16:12:04,310 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=IM-0003-0001.jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000
+2026-03-03 16:12:07,665 INFO OCR_GATE_INCONCLUSIVE_ALLOW ip=127.0.0.1 file=IM-0003-0001.jpeg ocr_ran=False
+2026-03-03 16:12:16,786 WARNING SCAN_MODE_MISMATCH_REJECT ip=127.0.0.1 file=IM-0003-0001.jpeg selected=Brain MRI detected=Chest X-Ray other_mass=1.0000

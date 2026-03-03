@@ -1,77 +1,135 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand: #2563eb;
-  --color-brand-light: #3b82f6;
-  --color-brand-dark: #1d4ed8;
+  /* ── Brand: clinical teal/emerald ── */
+  --color-brand: #0d9488;
+  --color-brand-light: #14b8a6;
+  --color-brand-dark: #0f766e;
+
+  /* ── Surfaces: hospital white ── */
   --color-surface: #ffffff;
-  --color-surface-alt: #f8fafc;
+  --color-surface-alt: #f8fafa;
+
+  /* ── Class palette (no purple — pituitary is rose-pink) ── */
   --color-glioma: #ef4444;
   --color-meningioma: #f59e0b;
   --color-notumor: #10b981;
-  --color-pituitary: #8b5cf6;
-  --color-normal: #06b6d4;
+  --color-pituitary: #ec4899;
+  --color-normal: #0d9488;
   --color-pneumonia: #e11d48;
+
   --font-sans: "Inter", system-ui, sans-serif;
+}
+
+/* ── Glassmorphic utility classes ── */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.03),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  }
+
+  .glass-subtle {
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03);
+    backdrop-filter: blur(12px) saturate(1.3);
+    -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  }
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+    @apply bg-stone-50 text-stone-800 antialiased;
     font-family: var(--font-sans);
   }
 }
 
-/* confidence ring animation */
+/* ── Ambient background mesh — soft clinical tones ── */
+#root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 70% 50% at 5% 15%, rgba(13, 148, 136, 0.06), transparent),
+    radial-gradient(ellipse 50% 50% at 95% 85%, rgba(16, 185, 129, 0.05), transparent),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(245, 158, 11, 0.03), transparent);
+  pointer-events: none;
+}
+
+/* ── Confidence ring animation ── */
 .conf-ring-animate {
   animation: ring-fill 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 @keyframes ring-fill {
-  from {
-    stroke-dashoffset: 251.2;
-  }
+  from { stroke-dashoffset: 251.2; }
 }
 
-/* toast slide-in */
+/* ── Toast slide-in ── */
 .toast-in {
   animation: toast-slide 0.3s ease forwards;
 }
 @keyframes toast-slide {
-  from {
-    opacity: 0;
-    transform: translateX(30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
+  from { opacity: 0; transform: translateX(30px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-/* drag hover pulse */
+/* ── Drag hover pulse (teal) ── */
 .drag-pulse {
   animation: pulse-border 1s ease-in-out infinite;
 }
 @keyframes pulse-border {
-  0%,
-  100% {
-    border-color: #3b82f6;
-  }
-  50% {
-    border-color: #93c5fd;
-  }
+  0%, 100% { border-color: #0d9488; }
+  50%      { border-color: #5eead4; }
 }
 
-/* scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
+/* ── Card hover lift ── */
+.card-lift {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255,255,255,0.8);
 }
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 99px;
+
+/* ── Fade-in entrance ── */
+.fade-in {
+  animation: fadeIn 0.5s ease-out both;
 }
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 99px; }
+
+/* ── Non-medical image warning shimmer ── */
+@keyframes warning-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.warning-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, 0.04) 0%,
+    rgba(239, 68, 68, 0.10) 50%,
+    rgba(239, 68, 68, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: warning-shimmer 3s ease-in-out infinite;
+}
+
+/* ── Teal accent checkbox override ── */
+input[type="checkbox"]:checked {
+  accent-color: #0d9488;
 }

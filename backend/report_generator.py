@@ -207,7 +207,8 @@ def compute_gradcam(
             gradients.clear()
             gradients.append(grad_out[0].detach())
 
-        last_conv = model.features[-1]
+        # For MedicalCNN (ResNet18 backbone), the last conv is in layer4.
+        last_conv = model.model.layer4[-1].conv2
         h1 = last_conv.register_forward_hook(fwd_hook)
         h2 = last_conv.register_full_backward_hook(bwd_hook)
 

@@ -66,11 +66,13 @@ fl_project/
 │   │   └── utils/
 │   │       └── api.js                  # Fetch wrappers, canonicalizeScanType()
 │   ├── public/
+│   │   └── favicon.svg                 # SVG favicon (medical hexagon icon)
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
 │
 ├── backend/
+│   ├── __init__.py                     # Package marker (required for module imports)
 │   ├── api.py                          # FastAPI app — all /api/* routes + SPA mount
 │   ├── model.py                        # MedicalCNN architecture + train/eval helpers
 │   ├── dataset.py                      # PyTorch Dataset, DataLoader, CLASS_NAMES
@@ -466,11 +468,8 @@ PYTHONPATH=. PYTHONIOENCODING=utf-8 uvicorn backend.api:app --host 127.0.0.1 --p
 git clone https://github.com/prasadxa/fl_project
 cd fl_project
 
-# 2. Install Python dependencies
-#    Python 3.11+:
+# 2. Install Python dependencies (works on Python 3.10+)
 pip install -r requirements.txt
-#    Python 3.10 (relaxed bounds):
-# pip install torch torchvision opencv-python Pillow numpy "scikit-learn>=1.5" "pandas>=2.0" openpyxl matplotlib seaborn rapidocr-onnxruntime fastapi "uvicorn[standard]" python-multipart reportlab
 
 # 3. Install and build the frontend
 cd frontend; npm install; npm run build; cd ..
@@ -531,23 +530,14 @@ npm run dev
 - **Node.js** ≥ 18 and **npm** ≥ 9 (for the React frontend)
 - Pre-trained model weights are included in `models/` — no retraining needed to run the dashboard
 
-> **Python 3.10 note:** `requirements.txt` pins `scikit-learn>=1.8.0` which requires Python ≥3.11. On Python 3.10 use the relaxed install command shown in [Step 0](#step-0--install-python-dependencies).
-
 ---
 
 ### Step 0 — Install Python Dependencies
 
-**Python 3.11+:**
+`requirements.txt` uses relaxed `>=` version bounds and works with Python 3.10+:
+
 ```bash
 pip install -r requirements.txt
-```
-
-**Python 3.10** (relaxed version bounds — `scikit-learn>=1.8` requires Python ≥3.11):
-```bash
-pip install torch torchvision opencv-python Pillow numpy \
-    "scikit-learn>=1.5" "pandas>=2.0" openpyxl \
-    matplotlib seaborn rapidocr-onnxruntime \
-    fastapi "uvicorn[standard]" python-multipart reportlab
 ```
 
 Optional — enable DICOM support:
@@ -602,11 +592,11 @@ python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
 
 **Windows (CMD / `.bat`):**
 
-> **Note:** `run_api.bat` has a hardcoded Python path and uses the incorrect module path `src.api:app`. Edit the `PYTHON` variable and change the uvicorn invocation to `backend.api:app` before use, or use the PowerShell command above instead.
-
 ```bat
 run_api.bat
 ```
+
+> Sets `PYTHONPATH` automatically and launches `backend.api:app` on port 8000.
 
 Then open: **http://127.0.0.1:8000**
 
@@ -1017,7 +1007,8 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 
 | File | Purpose |
 |---|---|
-| `backend/api.py` | FastAPI app — mounts SPA at `/`, exposes all `/api/*` routes, loads models on startup |
+| `backend/__init__.py` | Package marker — required for `python -m uvicorn backend.api:app` to resolve imports |
+| `backend/api.py` | FastAPI app — smart SPA/static handler, all `/api/*` routes, startup TTL cleanup task |
 | `backend/scan_classifier.py` | **ScanGate** — EfficientNet-B0 4-class gatekeeper; heuristic fallback if weights missing |
 | `backend/train_gate.py` | Training script for `scan_gate.pth`; downloads CIFAR-10 automatically |
 | `backend/model.py` | `MedicalCNN` definition + `train_one_epoch` / `evaluate` helpers |
@@ -1027,12 +1018,15 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 | `backend/client.py` | Flower `NumPyClient` — scans `new_collected_data/` before each `fit()`, archives after |
 | `backend/train_sim.py` | Self-contained FedAvg simulation — no Flower network stack |
 | `backend/evaluate_global.py` | Loads `global_model.pth`, runs inference on `global_test/`, prints report + confusion matrix |
+| `frontend/public/favicon.svg` | SVG favicon (medical hexagon); linked in `index.html` |
 | `frontend/src/utils/api.js` | Fetch wrappers + `canonicalizeScanType()` (prevents string-mismatch bugs) |
 | `frontend/src/pages/Classify.jsx` | Main upload UI, canvas pre-check, scan-type selector, results render |
-| `models/global_model.pth` | Latest MedicalCNN weights (6-class classifier) |
+| `frontend/src/pages/History.jsx` | Paginated prediction history with session metadata |
+| `frontend/src/pages/Admin.jsx` | Admin dashboard — aggregate stats, feedback log, Excel/CSV export |
+| `models/global_model.pth` | Latest MedicalCNN weights (6-class classifier, 91.73% accuracy) |
 | `models/scan_gate.pth` | ScanGate EfficientNet-B0 weights |
 | `data/audit.log` | Rotating audit log for all gate pass/reject events |
-| `run_api.bat` | Windows: one-click FastAPI launcher |
+| `run_api.bat` | Windows: one-click FastAPI launcher (sets `PYTHONPATH`, uses `backend.api:app`) |
 | `run_edge.bat` | Windows: launches FL server, 3 clients, and Streamlit UI |
 | `run.bat` | Windows: FL server + 3 clients only (background, logs to `logs/`) |
 
@@ -1067,11 +1061,16 @@ Confusion matrix saved at: `models/confusion_matrix.png`
 
 - Training runs on **CPU only** by default — no GPU required; each FL round takes ~7–10 minutes
 - `PYTHONIOENCODING=utf-8` is required on Windows to avoid cp1252 encoding errors with Flower's log output
-- **`PYTHONPATH` must be set to the project root** when launching uvicorn so Python can resolve the `backend` package (e.g. `$env:PYTHONPATH = $PWD` in PowerShell or `PYTHONPATH=.` in bash)
-- `requirements.txt` pins `scikit-learn>=1.8.0` which requires Python ≥3.11; on Python 3.10 install `scikit-learn>=1.5` instead
-- `run_api.bat` has a hardcoded Python path and an incorrect module reference (`src.api:app` instead of `backend.api:app`) — use the PowerShell commands above on any machine other than the original dev machine
+- **`PYTHONPATH` must be set to the project root** when launching uvicorn so Python can resolve the `backend` package (e.g. `$env:PYTHONPATH = $PWD` in PowerShell or `PYTHONPATH=.` in bash); all three `.bat` files set this automatically
+- `requirements.txt` uses relaxed `>=` version bounds — `pip install -r requirements.txt` works on Python 3.10 and 3.11 without any manual overrides
+- All three Windows launcher scripts (`run_api.bat`, `run_edge.bat`, `run.bat`) correctly invoke `backend.api:app` and set `PYTHONPATH` — no manual edits needed
 - The best known checkpoint is `global_model.pth` at **91.73%** accuracy, produced by 3 continuation rounds of `train_sim.py` from the Round 5 FL base
 - OCR is fully optional — the dashboard degrades gracefully when `rapidocr-onnxruntime` is not present
 - `scan_gate.pth` is required for full gate functionality but not strictly required to start the server — if missing, the backend logs a warning and falls back to pixel heuristics
 - CIFAR-10 is downloaded automatically on the first `train_gate.py` run (~163 MB); cached in `data/cifar10_cache/` for subsequent runs
 - The ScanGate keeps RGB colour information at inference time — colour is the primary signal used to reject non-medical photos
+- A background task cleans up temp files older than 1 hour every 5 minutes — no manual cleanup needed
+- CSP headers allow Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) so the Inter font loads correctly
+- Static assets (hashed JS/CSS) are cacheable by the browser; only `/api/*` responses carry `Cache-Control: no-store`
+- `backend/__init__.py` marks the backend as a proper Python package — required for `python -m uvicorn backend.api:app` to resolve imports correctly
+- `frontend/public/favicon.svg` provides a medical SVG favicon; linked in `index.html`

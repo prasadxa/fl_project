@@ -956,7 +956,10 @@ export default function Classify() {
         <div className="space-y-4 fade-in">
           {/* Drop Zone */}
           <div
-            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass ${
+            role="button"
+            tabIndex={0}
+            aria-label="Upload medical image"
+            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
               dragActive
                 ? "border-teal-500 bg-teal-50/40 drag-pulse"
                 : "border-stone-300 hover:border-teal-400"
@@ -968,6 +971,12 @@ export default function Classify() {
             onDragLeave={() => setDragActive(false)}
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
           >
             <input
               ref={inputRef}

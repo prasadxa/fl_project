@@ -1,0 +1,3 @@
+## 2024-05-15 - Interactive drag-and-drop divs must behave like buttons
+**Learning:** Found a drag-and-drop div (dropzone) in the medical image uploader that had an `onClick` handler but lacked any keyboard semantics. It was unreachable by keyboard navigation. The pattern of using non-interactive elements (`div`) as primary interactive controls without `role="button"`, `tabIndex={0}`, and `onKeyDown` handlers excludes keyboard users entirely.
+**Action:** When implementing custom interactive elements like dropzones using standard `div` tags, always ensure they are fully operable with a keyboard by adding `tabIndex={0}`, `role="button"`, a space/enter keydown handler, clear `aria-label` descriptions, and visible focus indicators (`focus-visible`).

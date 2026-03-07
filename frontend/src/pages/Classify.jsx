@@ -955,8 +955,8 @@ export default function Classify() {
         {/* ── Left: Upload ── */}
         <div className="space-y-4 fade-in">
           {/* Drop Zone */}
-          <div
-            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass ${
+          <label
+            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass block focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
               dragActive
                 ? "border-teal-500 bg-teal-50/40 drag-pulse"
                 : "border-stone-300 hover:border-teal-400"
@@ -967,13 +967,12 @@ export default function Classify() {
             }}
             onDragLeave={() => setDragActive(false)}
             onDrop={onDrop}
-            onClick={() => inputRef.current?.click()}
           >
             <input
               ref={inputRef}
               type="file"
               accept="image/*,.dcm"
-              className="hidden"
+              className="sr-only"
               onChange={(e) => handleFile(e.target.files[0])}
             />
             {preview ? (
@@ -1007,7 +1006,7 @@ export default function Classify() {
                 </p>
               </div>
             )}
-          </div>
+          </label>
 
           {/* Options Panel */}
           <div className="glass rounded-2xl p-5 space-y-4">
@@ -1021,7 +1020,8 @@ export default function Classify() {
                   <button
                     key={t}
                     onClick={() => handleScanTypeChange(t)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    aria-pressed={scanType === t}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${
                       scanType === t
                         ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20"
                         : "bg-stone-100 text-stone-600 hover:bg-stone-200"
@@ -1039,29 +1039,29 @@ export default function Classify() {
               )}
             </div>
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer group">
                 <input
                   type="checkbox"
                   checked={gradcam}
                   onChange={(e) => setGradcam(e.target.checked)}
-                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
                 />
-                <span className="text-sm text-stone-600">Grad-CAM</span>
+                <span className="text-sm text-stone-600 group-hover:text-stone-800 transition-colors">Grad-CAM</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer group">
                 <input
                   type="checkbox"
                   checked={mcDropout}
                   onChange={(e) => setMcDropout(e.target.checked)}
-                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
                 />
-                <span className="text-sm text-stone-600">MC Dropout</span>
+                <span className="text-sm text-stone-600 group-hover:text-stone-800 transition-colors">MC Dropout</span>
               </label>
             </div>
             <button
               onClick={classify}
               disabled={!file || loading || visualCheckPending}
-              className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+              className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600"
             >
               {visualCheckPending ? (
                 <span className="flex items-center justify-center gap-2">
@@ -1381,7 +1381,7 @@ export default function Classify() {
                       <div className="flex gap-3">
                         <button
                           onClick={() => submitFeedback(true)}
-                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition"
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600"
                         >
                           Agree
                         </button>
@@ -1393,7 +1393,7 @@ export default function Classify() {
                                 : topProbs[1]?.[0] || topProbs[0]?.[0] || "",
                             )
                           }
-                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition"
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-600"
                         >
                           Override
                         </button>
@@ -1413,7 +1413,7 @@ export default function Classify() {
                           </select>
                           <button
                             onClick={() => submitFeedback(false)}
-                            className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition"
+                            className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600"
                           >
                             Submit
                           </button>
@@ -1449,7 +1449,7 @@ export default function Classify() {
                   <button
                     onClick={handleDownloadReport}
                     disabled={downloadingReport}
-                    className="w-full py-2.5 rounded-xl font-bold text-sm text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 disabled:opacity-50 transition flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl font-bold text-sm text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 disabled:opacity-50 transition flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600"
                   >
                     {downloadingReport ? (
                       <>

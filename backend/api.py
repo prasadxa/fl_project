@@ -2247,9 +2247,16 @@ def admin_sessions(limit: int = 50, offset: int = 0):
 def serve_spa(full_path: str):
     """Serve dist files when they exist; fall back to index.html for React Router."""
     if FRONTEND_DIR.exists():
-        candidate = FRONTEND_DIR / full_path
-        if candidate.is_file():
-            return FileResponse(str(candidate))
+        try:
+            candidate = (FRONTEND_DIR / full_path).resolve()
+            # Prevent path traversal vulnerabilities
+            candidate.relative_to(FRONTEND_DIR.resolve())
+            if candidate.is_file():
+                return FileResponse(str(candidate))
+        except ValueError:
+            # Traversal attempt or invalid path
+            pass
+
         index_file = FRONTEND_DIR / "index.html"
         if index_file.exists():
             return FileResponse(str(index_file))

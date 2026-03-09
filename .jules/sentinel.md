@@ -1,0 +1,4 @@
+## 2024-05-18 - Command Injection via LaTeX in PDF Generation
+**Vulnerability:** Arbitrary user input from the feedback form (`patient_name`, `patient_id`, etc.) was interpolated directly into a `.tex` template in `backend/latex_report.py`, which was then compiled using `subprocess.run(["pdflatex", ...])`. This allowed for LaTeX Injection, enabling arbitrary file read (e.g., `\input{/etc/passwd}`) or RCE via `\write18`.
+**Learning:** Even if the direct attack surface is a document generation tool, passing unsanitized user inputs to `pdflatex` or similar compilers acts identically to shell command injection.
+**Prevention:** Always escape special LaTeX control characters (`\`, `{`, `}`, `$`, `&`, `#`, `^`, `_`, `~`, `%`) using a dedicated escaping function before interpolating user data into LaTeX templates.

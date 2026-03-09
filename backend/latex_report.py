@@ -5,6 +5,27 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def escape_latex(text: str) -> str:
+    """Escape LaTeX special characters to prevent command injection."""
+    if not text:
+        return ""
+    text = str(text)
+    # The order matters. Backslash must be escaped first, and we use a placeholder
+    # to avoid double escaping braces introduced by \textbackslash{}
+    text = text.replace('\\', r'\textbackslash')
+    text = text.replace('{', r'\{')
+    text = text.replace('}', r'\}')
+    text = text.replace('$', r'\$')
+    text = text.replace('&', r'\&')
+    text = text.replace('#', r'\#')
+    text = text.replace('^', r'\textasciicircum{}')
+    text = text.replace('_', r'\_')
+    text = text.replace('~', r'\textasciitilde{}')
+    text = text.replace('%', r'\%')
+    # Restore the {} for textbackslash
+    text = text.replace(r'\textbackslash', r'\textbackslash{}')
+    return text
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -31,12 +52,12 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {escape_latex(req.server_timestamp)} \\quad \\textbf{{Session:}} {escape_latex(req.session_id[:16])}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {escape_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {escape_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {escape_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {escape_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

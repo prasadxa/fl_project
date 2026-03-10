@@ -1,0 +1,4 @@
+## 2024-05-24 - LaTeX Injection Vulnerability in Diagnostic Reports
+**Vulnerability:** User-controlled strings (like patient name, patient ID, etc.) were being interpolated directly into a `.tex` string in `backend/latex_report.py`. These files were passed to `pdflatex`, which allows executing arbitrary code (like `\write18` or `\input`) leading to remote command execution or path traversal.
+**Learning:** Generating dynamic documents using engines like LaTeX or PDF generation tools that parse templates can be highly dangerous. User inputs must always be considered untrusted and escaped according to the specific context (in this case, LaTeX special characters).
+**Prevention:** Always sanitize/escape user inputs before interpolating them into a template. Create and use an `escape_latex` utility mapping special characters to their safe equivalents, or ideally use a safer template engine to render reports when possible.

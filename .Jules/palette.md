@@ -1,0 +1,3 @@
+## 2024-05-24 - Improve Keyboard Navigability for File Uploads
+**Learning:** For React single-page apps, using `hidden` on a file input breaks keyboard accessibility as the element is completely removed from the DOM focus flow. Replacing `div` wrappers with semantic `label` wrappers and using `sr-only` class ensures screen-readers and keyboard navigators (Tab) can naturally focus on the element. Using `focus-within` on the parent label provides visual feedback to the keyboard user without custom JavaScript.
+**Action:** Always wrap `input type="file"` in a `label`, apply `sr-only` instead of `hidden` to the input, and style the parent label with `focus-within:ring-*` styles for accessible file uploads.

@@ -5,6 +5,25 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def _escape_latex(s: str) -> str:
+    """Escapes LaTeX special characters to prevent injection."""
+    if not s:
+        return ""
+    s = str(s)
+    replacements = {
+        '\\': r'\textbackslash{}',
+        '{': r'\{',
+        '}': r'\}',
+        '#': r'\#',
+        '$': r'\$',
+        '%': r'\%',
+        '&': r'\&',
+        '_': r'\_',
+        '^': r'\textasciicircum{}',
+        '~': r'\textasciitilde{}',
+    }
+    return "".join(replacements.get(c, c) for c in s)
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -18,10 +37,10 @@ def build_latex_report(req: ReportRequest) -> bytes:
             cv2.imwrite(str(p / "cam.jpg"), cv2.cvtColor(req.gradcam_image, cv2.COLOR_RGB2BGR))
             cam_img = r"\includegraphics[width=0.45\textwidth]{cam.jpg}"
             
-        sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
-        risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
+        sn = _escape_latex(SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key))
+        risk = _escape_latex(RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN"))
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        probs = "\n".join([f"\\item \\textbf{{{_escape_latex(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
@@ -31,12 +50,12 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {_escape_latex(req.server_timestamp)} \\quad \\textbf{{Session:}} {_escape_latex(req.session_id[:16])}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {_escape_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {_escape_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {_escape_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {_escape_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

@@ -5,6 +5,23 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+
+def escape_latex(s: str) -> str:
+    s = str(s)
+    mapping = {
+        '\\': r'\textbackslash{}',
+        '{': r'\{',
+        '}': r'\}',
+        '_': r'\_',
+        '^': r'\textasciicircum{}',
+        '#': r'\#',
+        '&': r'\&',
+        '$': r'\$',
+        '%': r'\%',
+        '~': r'\textasciitilde{}',
+    }
+    return "".join(mapping.get(c, c) for c in s)
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -21,7 +38,7 @@ def build_latex_report(req: ReportRequest) -> bytes:
         sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
         risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        probs = "\n".join([f"\\item \\textbf{{{escape_latex(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
@@ -31,19 +48,19 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {escape_latex(req.server_timestamp)} \\quad \\textbf{{Session:}} {escape_latex(req.session_id[:16])}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {escape_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {escape_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {escape_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {escape_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}
 \\end{{center}}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
-\\textbf{{Prediction:}} {sn} \\\\
-\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {risk}
+\\textbf{{Prediction:}} {escape_latex(sn)} \\\\
+\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {escape_latex(risk)}
 \\begin{{itemize}}
 {probs}
 \\end{{itemize}}

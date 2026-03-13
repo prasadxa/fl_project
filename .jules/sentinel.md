@@ -1,0 +1,4 @@
+## 2024-05-24 - LaTeX Injection in PDF Report Generation
+**Vulnerability:** User-supplied fields (patient name, ID, etc.) were interpolated directly into a LaTeX template string using Python f-strings before being passed to `pdflatex` via `subprocess.run()`. This allowed arbitrary LaTeX command execution (e.g., `\input{/etc/passwd}`).
+**Learning:** LaTeX templates are inherently vulnerable to command injection if user input is not escaped, similar to SQL injection. Because LaTeX is a full programming language, attackers can use unescaped characters like `\` or `{` to execute commands or read local files.
+**Prevention:** Always escape user input using a single-pass character replacement strategy (handling characters like `\`, `{`, `}`, `_`, `^`, `#`, `&`, `$`, `%`, `~`) before inserting it into a LaTeX template. Avoid double-escaping by processing all target characters in a single dictionary-based pass.

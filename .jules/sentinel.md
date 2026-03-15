@@ -1,0 +1,4 @@
+## 2024-03-04 - [CRITICAL] Fixed Path Traversal in FastAPI SPA Route
+**Vulnerability:** A catch-all route `/{full_path:path}` in `backend/api.py` serving static files from the frontend build directory concatenated user input (`full_path`) directly with the base directory path without resolving it. This allowed attackers to use `../` sequences to read arbitrary files from the filesystem.
+**Learning:** Even when using `pathlib.Path`, simple concatenation like `FRONTEND_DIR / full_path` does not prevent directory traversal if `full_path` contains `../`. The `pathlib.Path` object will simply represent the unresolved path.
+**Prevention:** Always resolve the final path using `.resolve()` and verify that it remains a subpath of the intended base directory using `.relative_to(base_dir.resolve())`. If `ValueError` is raised, it indicates a traversal attempt.

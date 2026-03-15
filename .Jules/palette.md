@@ -1,0 +1,3 @@
+## 2024-03-01 - Keyboard Accessible Drop Zones
+**Learning:** Custom `div`-based drag-and-drop file upload zones that mask a hidden file input completely break keyboard accessibility if they lack proper semantics. Without `tabIndex`, `role="button"`, explicit keyboard event handlers (`onKeyDown` for Space/Enter), and visible focus states, screen reader and keyboard users cannot trigger the upload.
+**Action:** Always ensure any interactive area that acts like a button (but uses a `div` or non-button element) explicitly implements button semantics and keyboard interaction, and receives a `focus-visible` ring.

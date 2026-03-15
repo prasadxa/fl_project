@@ -955,8 +955,9 @@ export default function Classify() {
         {/* ── Left: Upload ── */}
         <div className="space-y-4 fade-in">
           {/* Drop Zone */}
-          <div
-            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass ${
+          <label
+            htmlFor="file-upload"
+            className={`block relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass outline-none focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
               dragActive
                 ? "border-teal-500 bg-teal-50/40 drag-pulse"
                 : "border-stone-300 hover:border-teal-400"
@@ -967,19 +968,19 @@ export default function Classify() {
             }}
             onDragLeave={() => setDragActive(false)}
             onDrop={onDrop}
-            onClick={() => inputRef.current?.click()}
           >
             <input
+              id="file-upload"
               ref={inputRef}
               type="file"
               accept="image/*,.dcm"
-              className="hidden"
+              className="sr-only"
               onChange={(e) => handleFile(e.target.files[0])}
             />
             {preview ? (
               <img
                 src={preview}
-                alt="Preview"
+                alt="Preview of selected medical image"
                 className="max-h-64 mx-auto rounded-xl shadow-lg"
               />
             ) : (
@@ -1007,7 +1008,7 @@ export default function Classify() {
                 </p>
               </div>
             )}
-          </div>
+          </label>
 
           {/* Options Panel */}
           <div className="glass rounded-2xl p-5 space-y-4">
@@ -1021,7 +1022,7 @@ export default function Classify() {
                   <button
                     key={t}
                     onClick={() => handleScanTypeChange(t)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
                       scanType === t
                         ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20"
                         : "bg-stone-100 text-stone-600 hover:bg-stone-200"
@@ -1044,7 +1045,7 @@ export default function Classify() {
                   type="checkbox"
                   checked={gradcam}
                   onChange={(e) => setGradcam(e.target.checked)}
-                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                 />
                 <span className="text-sm text-stone-600">Grad-CAM</span>
               </label>
@@ -1053,7 +1054,7 @@ export default function Classify() {
                   type="checkbox"
                   checked={mcDropout}
                   onChange={(e) => setMcDropout(e.target.checked)}
-                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+                  className="w-4 h-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                 />
                 <span className="text-sm text-stone-600">MC Dropout</span>
               </label>
@@ -1061,7 +1062,7 @@ export default function Classify() {
             <button
               onClick={classify}
               disabled={!file || loading || visualCheckPending}
-              className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+              className="w-full py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             >
               {visualCheckPending ? (
                 <span className="flex items-center justify-center gap-2">

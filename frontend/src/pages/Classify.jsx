@@ -955,8 +955,9 @@ export default function Classify() {
         {/* ── Left: Upload ── */}
         <div className="space-y-4 fade-in">
           {/* Drop Zone */}
-          <div
-            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass ${
+          <label
+            htmlFor="file-upload"
+            className={`relative block border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer glass focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
               dragActive
                 ? "border-teal-500 bg-teal-50/40 drag-pulse"
                 : "border-stone-300 hover:border-teal-400"
@@ -967,13 +968,13 @@ export default function Classify() {
             }}
             onDragLeave={() => setDragActive(false)}
             onDrop={onDrop}
-            onClick={() => inputRef.current?.click()}
           >
             <input
+              id="file-upload"
               ref={inputRef}
               type="file"
               accept="image/*,.dcm"
-              className="hidden"
+              className="sr-only"
               onChange={(e) => handleFile(e.target.files[0])}
             />
             {preview ? (
@@ -1007,7 +1008,7 @@ export default function Classify() {
                 </p>
               </div>
             )}
-          </div>
+          </label>
 
           {/* Options Panel */}
           <div className="glass rounded-2xl p-5 space-y-4">

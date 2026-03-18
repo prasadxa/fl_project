@@ -1,0 +1,3 @@
+## 2024-05-20 - Accessible file inputs
+**Learning:** Using `hidden` on a file input breaks accessibility because it removes it from the keyboard tab sequence. To retain accessibility but hide the browser's default file picker UI, it's better to wrap the custom drop zone with a `<label>` element, set the `<input type="file">` to `sr-only` so it's visibly hidden but keyboard focusable, and apply focus styles like `focus-within:ring-2` to the container to show when the hidden input has keyboard focus.
+**Action:** Always prefer `sr-only` over `hidden` for inputs, and apply visual focus states to the parent container (`focus-within`) for fully custom, accessible file upload components.

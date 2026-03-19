@@ -1,0 +1,4 @@
+## 2025-02-28 - Path Traversal Vulnerability in Catch-All SPA Route
+**Vulnerability:** The catch-all SPA route in `backend/api.py` (`@app.get("/{full_path:path}")`) passed `full_path` directly to `Path(FRONTEND_DIR) / full_path` without resolving and verifying the resulting path.
+**Learning:** Even when `FastAPI` (via Starlette) strips raw `../` out of standard URL paths before hitting the route, a URL-encoded payload like `%2e%2e%2f` is decoded after URL path parsing and passed directly to the route parameter. In combination with `pathlib.Path` which interprets `../` to walk up the directory tree, this creates an arbitrary file read vulnerability.
+**Prevention:** Always `resolve()` user-supplied paths joined to a base directory, and explicitly verify that the resolved path is a child of the base directory via `candidate.relative_to(base_dir)`.

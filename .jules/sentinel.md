@@ -1,0 +1,5 @@
+## 2024-05-20 - FastAPI `{path:path}` URL Decoding Traversal
+
+**Vulnerability:** The SPA file serving endpoint `/{full_path:path}` in `backend/api.py` was vulnerable to path traversal. Attackers could send URL-encoded payloads like `%2e%2e%2f` (which decodes to `../`) to traverse directories outside of the intended `FRONTEND_DIR` and access arbitrary files on the server (e.g., source code, configuration files).
+**Learning:** FastAPI path parameters defined as `{path:path}` automatically decode URL-encoded characters (like `%2e%2e%2f` to `../`) *after* Starlette's initial path sanitization phase. This means simple concatenation like `FRONTEND_DIR / full_path` directly exposes the application to path traversal vulnerabilities because the decoded string can navigate upwards in the file tree.
+**Prevention:** Always verify that any path derived from user input (especially `{path:path}` parameters) remains within the intended base directory. Use `candidate_path.resolve().relative_to(base_dir.resolve())`. If the path is outside the base directory, `relative_to()` will raise a `ValueError`, allowing the application to securely block the request.

@@ -2248,6 +2248,15 @@ def serve_spa(full_path: str):
     """Serve dist files when they exist; fall back to index.html for React Router."""
     if FRONTEND_DIR.exists():
         candidate = FRONTEND_DIR / full_path
+
+        # Security: Prevent path traversal vulnerabilities by verifying the resolved
+        # candidate path is actually within the FRONTEND_DIR. FastAPI's {path:path}
+        # can decode URL-encoded traversal payloads (like %2e%2e%2f to ../).
+        try:
+            candidate.resolve().relative_to(FRONTEND_DIR.resolve())
+        except ValueError:
+            return JSONResponse({"detail": "Invalid path"}, status_code=403)
+
         if candidate.is_file():
             return FileResponse(str(candidate))
         index_file = FRONTEND_DIR / "index.html"

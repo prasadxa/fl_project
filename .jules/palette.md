@@ -1,0 +1,4 @@
+## 2024-03-20 - Accessible Dropzones
+
+**Learning:** When creating a custom file upload dropzone, using a visually-hidden `<input type="file" className="hidden">` inside a `div` breaks keyboard accessibility, as `hidden` elements cannot receive focus or trigger actions. It is crucial to use `<label>` instead of `div` as the dropzone container, because a label naturally links to the nested input. Additionally, hiding the input via screen-reader-only styling (`sr-only` class) allows it to stay in the accessibility tree and remain focusable, and wrapping the input in a `<label>` means any `<label>` click defaults to clicking the input directly, allowing removal of manual `onClick={() => inputRef.current?.click()}` handlers.
+**Action:** Always build dropzones using `<label>` and `<input type="file" className="sr-only">`, and implement `focus-within` styles on the parent label container to display keyboard focus cleanly.

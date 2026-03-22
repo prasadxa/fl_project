@@ -2248,6 +2248,12 @@ def serve_spa(full_path: str):
     """Serve dist files when they exist; fall back to index.html for React Router."""
     if FRONTEND_DIR.exists():
         candidate = FRONTEND_DIR / full_path
+
+        try:
+            candidate.resolve().relative_to(FRONTEND_DIR.resolve())
+        except ValueError:
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
         if candidate.is_file():
             return FileResponse(str(candidate))
         index_file = FRONTEND_DIR / "index.html"

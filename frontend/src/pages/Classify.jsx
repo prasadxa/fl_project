@@ -1012,15 +1012,16 @@ export default function Classify() {
           <div className="glass rounded-2xl p-5 space-y-4">
             {/* Scan Type */}
             <div>
-              <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
+              <label id="scan-type-label" className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
                 Scan Type
               </label>
-              <div className="flex gap-2 mt-2">
+              <div role="group" aria-labelledby="scan-type-label" className="flex gap-2 mt-2">
                 {SCAN_TYPES.map((t) => (
                   <button
                     key={t}
                     onClick={() => handleScanTypeChange(t)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    aria-pressed={scanType === t}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
                       scanType === t
                         ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20"
                         : "bg-stone-100 text-stone-600 hover:bg-stone-200"
@@ -1138,7 +1139,7 @@ export default function Classify() {
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600">
+            <div role="alert" aria-live="assertive" className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600">
               {error}
             </div>
           )}
@@ -1431,16 +1432,18 @@ export default function Classify() {
                   Export a professional clinical diagnostic report.
                 </p>
                 <div className="flex flex-col gap-3">
-                  <div className="flex bg-stone-100 rounded-xl p-1">
+                  <div role="group" aria-label="Report Format" className="flex bg-stone-100 rounded-xl p-1">
                     <button
                       onClick={() => setReportFormat("latex")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${reportFormat === "latex" ? "bg-white text-teal-700 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}
+                      aria-pressed={reportFormat === "latex"}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${reportFormat === "latex" ? "bg-white text-teal-700 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}
                     >
                       LaTeX PDF
                     </button>
                     <button
                       onClick={() => setReportFormat("reportlab")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${reportFormat === "reportlab" ? "bg-white text-teal-700 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}
+                      aria-pressed={reportFormat === "reportlab"}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${reportFormat === "reportlab" ? "bg-white text-teal-700 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}
                     >
                       Standard PDF
                     </button>

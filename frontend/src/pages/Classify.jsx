@@ -785,6 +785,22 @@ export default function Classify() {
     [handleFile],
   );
 
+  const clearFile = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setError(null);
+    setOcrRejected(null);
+    setOcrStatus("idle");
+    setOcrPassKeywords([]);
+    setFbSent(false);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
   const classify = async () => {
     if (!file) return;
 
@@ -976,11 +992,33 @@ export default function Classify() {
               onChange={(e) => handleFile(e.target.files[0])}
             />
             {preview ? (
-              <img
-                src={preview}
-                alt="Preview"
-                className="max-h-64 mx-auto rounded-xl shadow-lg"
-              />
+              <div className="relative inline-block group">
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="max-h-64 mx-auto rounded-xl shadow-lg"
+                />
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  aria-label="Remove image"
+                  className="absolute -top-3 -right-3 w-8 h-8 flex items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-red-50 hover:text-red-600 shadow-md border border-stone-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth="2.5"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18 18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
             ) : (
               <div className="py-8">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-50 flex items-center justify-center">

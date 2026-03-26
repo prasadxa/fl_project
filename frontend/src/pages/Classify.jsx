@@ -230,7 +230,6 @@ function isLikelyNonMedical(result) {
   const probs = Object.values(result.all_probabilities);
   const topConf = result.confidence || 0;
   const count = probs.length || 1;
-  const evenDist = 1 / count;
   const avgProb = probs.reduce((a, b) => a + b, 0) / count;
   const spreadRatio = avgProb > 0 ? topConf / avgProb : 999;
   // Low confidence AND probabilities are roughly uniform => not a real scan
@@ -900,7 +899,9 @@ export default function Classify() {
         scan_type: scanType,
       });
       setFbSent(true);
-    } catch {}
+    } catch (e) {
+      console.error("Failed to submit feedback", e);
+    }
   };
   const [overrideClass, setOverrideClass] = useState("");
 
@@ -976,11 +977,34 @@ export default function Classify() {
               onChange={(e) => handleFile(e.target.files[0])}
             />
             {preview ? (
-              <img
-                src={preview}
-                alt="Preview"
-                className="max-h-64 mx-auto rounded-xl shadow-lg"
-              />
+              <div className="relative inline-block">
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="max-h-64 mx-auto rounded-xl shadow-lg"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setFile(null);
+                    setPreview(null);
+                    setResult(null);
+                    setError(null);
+                    setOcrRejected(null);
+                    setOcrStatus("idle");
+                    setOcrPassKeywords([]);
+                    setFbSent(false);
+                    if (inputRef.current) inputRef.current.value = "";
+                  }}
+                  aria-label="Remove image"
+                  className="absolute -top-3 -right-3 w-8 h-8 flex items-center justify-center bg-white rounded-full text-stone-500 hover:text-red-500 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ) : (
               <div className="py-8">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-50 flex items-center justify-center">

@@ -688,6 +688,7 @@ export default function Classify() {
   const [ocrPassKeywords, setOcrPassKeywords] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [fbSent, setFbSent] = useState(false);
+  const [fbSubmitting, setFbSubmitting] = useState(false);
   const inputRef = useRef();
 
   const [downloadingReport, setDownloadingReport] = useState(false);
@@ -892,6 +893,7 @@ export default function Classify() {
       ? result.predicted_key || result.predicted_class
       : overrideClass;
     if (!chosenKey) return;
+    setFbSubmitting(agreed ? "agree" : "override");
     try {
       await sendFeedback({
         session_id: result.session_id,
@@ -901,6 +903,7 @@ export default function Classify() {
       });
       setFbSent(true);
     } catch {}
+    setFbSubmitting(false);
   };
   const [overrideClass, setOverrideClass] = useState("");
 
@@ -1381,8 +1384,15 @@ export default function Classify() {
                       <div className="flex gap-3">
                         <button
                           onClick={() => submitFeedback(true)}
-                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition"
+                          disabled={!!fbSubmitting}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                         >
+                          {fbSubmitting === "agree" && (
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                          )}
                           Agree
                         </button>
                         <button
@@ -1393,7 +1403,8 @@ export default function Classify() {
                                 : topProbs[1]?.[0] || topProbs[0]?.[0] || "",
                             )
                           }
-                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition"
+                          disabled={!!fbSubmitting}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                         >
                           Override
                         </button>
@@ -1403,7 +1414,9 @@ export default function Classify() {
                           <select
                             value={overrideClass}
                             onChange={(e) => setOverrideClass(e.target.value)}
-                            className="flex-1 px-3 py-2 rounded-xl text-sm bg-white border border-stone-200 text-stone-700"
+                            disabled={!!fbSubmitting}
+                            aria-label="Select override class"
+                            className="flex-1 px-3 py-2 rounded-xl text-sm bg-white border border-stone-200 text-stone-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                           >
                             {topProbs.map(([cls]) => (
                               <option key={cls} value={cls}>
@@ -1413,8 +1426,15 @@ export default function Classify() {
                           </select>
                           <button
                             onClick={() => submitFeedback(false)}
-                            className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition"
+                            disabled={!!fbSubmitting}
+                            className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                           >
+                            {fbSubmitting === "override" && (
+                              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                            )}
                             Submit
                           </button>
                         </div>

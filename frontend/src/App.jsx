@@ -20,6 +20,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:p-4 focus:bg-teal-600 focus:text-white focus:font-bold focus:rounded-br-xl focus:outline-none focus:ring-2 focus:ring-teal-500 top-0 left-0 shadow-xl transition-all"
+      >
+        Skip to main content
+      </a>
       {/* ── Navbar ── */}
       <nav className="sticky top-0 z-50 glass rounded-none"
         style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
@@ -43,7 +49,7 @@ export default function App() {
                   to={n.to}
                   end={n.to === '/'}
                   className={({ isActive }) =>
-                    `px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    `px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
                       isActive
                         ? 'bg-teal-50 text-teal-700 shadow-sm'
                         : 'text-stone-500 hover:bg-white/60 hover:text-stone-700'
@@ -77,7 +83,7 @@ export default function App() {
               to={n.to}
               end={n.to === '/'}
               className={({ isActive }) =>
-                `flex-1 text-center py-2.5 text-xs font-medium transition-all ${
+                `flex-1 text-center py-2.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
                   isActive ? 'text-teal-700 bg-teal-50' : 'text-stone-400'
                 }`
               }
@@ -90,7 +96,7 @@ export default function App() {
       </nav>
 
       {/* ── Page Content ── */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         <Routes>
           <Route path="/" element={<Dashboard health={health} />} />
           <Route path="/classify" element={<Classify />} />

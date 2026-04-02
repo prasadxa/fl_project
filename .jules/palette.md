@@ -1,3 +1,7 @@
 ## 2025-03-22 - Toggle Button Accessibility
 **Learning:** For custom tab or toggle button groups (like Scan Type or Report Format selectors), visual classes like `bg-teal-600 text-white` are not enough for screen readers. Using `role="group"` on the container with a proper label (`aria-labelledby` or `aria-label`), and setting `aria-pressed={isActive}` on the buttons is critical for conveying the current selection state to assistive technologies. Keyboard focus styles (like `focus-visible:ring-2`) should also be applied to these buttons since they are interactive elements.
 **Action:** Always verify that custom UI controls that act as radio buttons or tabs have appropriate ARIA roles (`group`, `radiogroup`, or `tablist`) and state attributes (`aria-pressed`, `aria-checked`, or `aria-selected`), along with clear visual focus indicators.
+
+## 2025-04-02 - Skip Links in React SPAs
+**Learning:** When implementing a 'Skip to main content' link in a React SPA, the target container (e.g., `<main>`) must have `tabIndex={-1}` to allow it to receive programmatic focus when the skip link is clicked. Additionally, applying a class like `outline-none` prevents an unwanted default focus ring from appearing around the entire main content area when it is focused.
+**Action:** Always ensure the target element of a skip link has `tabIndex={-1}` and appropriate outline-suppressing styles, while keeping `focus-visible` styles on interactive elements like navigation links.

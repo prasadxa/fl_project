@@ -1,3 +1,7 @@
 ## 2025-03-22 - Toggle Button Accessibility
 **Learning:** For custom tab or toggle button groups (like Scan Type or Report Format selectors), visual classes like `bg-teal-600 text-white` are not enough for screen readers. Using `role="group"` on the container with a proper label (`aria-labelledby` or `aria-label`), and setting `aria-pressed={isActive}` on the buttons is critical for conveying the current selection state to assistive technologies. Keyboard focus styles (like `focus-visible:ring-2`) should also be applied to these buttons since they are interactive elements.
 **Action:** Always verify that custom UI controls that act as radio buttons or tabs have appropriate ARIA roles (`group`, `radiogroup`, or `tablist`) and state attributes (`aria-pressed`, `aria-checked`, or `aria-selected`), along with clear visual focus indicators.
+
+## 2025-03-22 - Skip to Main Content Accessibility
+**Learning:** Implementing a "Skip to main content" link significantly improves keyboard accessibility for SPAs by allowing users to bypass repetitive navigation. It requires adding `tabIndex={-1}` and removing focus rings (e.g. `outline-none`) on the target container to receive programmatic focus properly without displaying an unwanted focus indicator.
+**Action:** Always include a visually hidden skip link (`sr-only focus:not-sr-only`) that points to an ID on the main content area (`<main id="main-content" tabIndex={-1} className="outline-none">`).

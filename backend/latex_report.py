@@ -2,8 +2,26 @@ import subprocess
 import tempfile
 import shutil
 import cv2
+import re
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
+
+def escape_latex(text):
+    text = str(text)
+    mapping = {
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\textasciicircum{}',
+        '\\': r'\textbackslash{}'
+    }
+    pattern = re.compile('|'.join(re.escape(k) for k in mapping.keys()))
+    return pattern.sub(lambda m: mapping[m.group()], text)
 
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
@@ -18,10 +36,18 @@ def build_latex_report(req: ReportRequest) -> bytes:
             cv2.imwrite(str(p / "cam.jpg"), cv2.cvtColor(req.gradcam_image, cv2.COLOR_RGB2BGR))
             cam_img = r"\includegraphics[width=0.45\textwidth]{cam.jpg}"
             
-        sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
-        risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
+        sn = escape_latex(SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key))
+        risk = escape_latex(RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN"))
+
+        probs = "\n".join([f"\\item \\textbf{{{escape_latex(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        # Escape user inputs
+        t_ts = escape_latex(req.server_timestamp)
+        t_sid = escape_latex(req.session_id[:16])
+        t_name = escape_latex(req.patient.patient_name)
+        t_id = escape_latex(req.patient.patient_id)
+        t_dob = escape_latex(req.patient.date_of_birth)
+        t_gen = escape_latex(req.patient.gender)
         
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
@@ -31,12 +57,12 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {t_ts} \\quad \\textbf{{Session:}} {t_sid}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {t_name} \\\\
+\\textbf{{Patient ID:}} {t_id} \\\\
+\\textbf{{DOB:}} {t_dob} \\quad \\textbf{{Gender:}} {t_gen}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

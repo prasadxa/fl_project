@@ -1,3 +1,7 @@
 ## 2025-03-22 - Toggle Button Accessibility
 **Learning:** For custom tab or toggle button groups (like Scan Type or Report Format selectors), visual classes like `bg-teal-600 text-white` are not enough for screen readers. Using `role="group"` on the container with a proper label (`aria-labelledby` or `aria-label`), and setting `aria-pressed={isActive}` on the buttons is critical for conveying the current selection state to assistive technologies. Keyboard focus styles (like `focus-visible:ring-2`) should also be applied to these buttons since they are interactive elements.
 **Action:** Always verify that custom UI controls that act as radio buttons or tabs have appropriate ARIA roles (`group`, `radiogroup`, or `tablist`) and state attributes (`aria-pressed`, `aria-checked`, or `aria-selected`), along with clear visual focus indicators.
+
+## 2024-11-20 - Skip Link Z-Index Issue
+**Learning:** When implementing a "Skip to main content" link that is visually hidden but focuses on Tab, you must verify its `z-index` relative to other sticky/fixed layout components. In this app, the sticky `<nav>` element had `z-index: 50`. Giving the skip link `z-50` or lower caused it to appear beneath the navigation bar, breaking the visual focus indicator.
+**Action:** Always ensure absolute-positioned accessibility helper components (like skip links) have a higher `z-index` (e.g., `z-[100]`) than any sticky layout elements to guarantee visibility when focused.

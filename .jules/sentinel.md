@@ -2,3 +2,7 @@
 **Vulnerability:** Path traversal in a catch-all route that serves static files using FastAPI path parameters.
 **Learning:** FastAPI's '{path:path}' definition decodes URL-encoded payloads like '%2e%2e%2f' after Starlette's initial sanitization, bypassing standard sanitizations and directly feeding dangerous input to 'pathlib.Path'.
 **Prevention:** Always verify paths mathematically using 'candidate.resolve().relative_to(base_dir.resolve())' instead of trusting the input when generating file paths.
+## 2025-02-28 - LaTeX Injection in PDF Report Generation
+**Vulnerability:** The application generated PDF reports by dynamically interpolating user-controlled fields (like patient names and IDs) and unescaped request-derived map keys into a raw LaTeX string (`\documentclass{article}...`) before compiling it via `pdflatex` using `subprocess.run`.
+**Learning:** LaTeX templates evaluated via command-line execution are susceptible to severe injection attacks. Control characters like `\`, `{`, `}`, `%`, and `$` can be weaponized to read arbitrary host files (e.g., `\input{/etc/passwd}`) or execute arbitrary code if shell-escape is enabled. Even dynamically generated data that appears safe (like `req.probabilities.keys()`) can carry hidden payloads.
+**Prevention:** Never construct LaTeX documents through raw string concatenation. If necessary, all dynamic inputs MUST be aggressively sanitized using a single-pass regex replacement logic (to avoid sequential substitution bugs) to escape LaTeX control characters before interpolation.

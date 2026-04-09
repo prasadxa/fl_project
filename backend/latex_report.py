@@ -2,8 +2,18 @@ import subprocess
 import tempfile
 import shutil
 import cv2
+import re
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
+
+def tex_escape(text):
+    text = str(text)
+    conv = {
+        "&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
+        "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}", "\\": r"\textbackslash{}"
+    }
+    return re.sub(r'[&%$#_{}~^\\]', lambda m: conv[m.group()], text)
 
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
@@ -18,11 +28,18 @@ def build_latex_report(req: ReportRequest) -> bytes:
             cv2.imwrite(str(p / "cam.jpg"), cv2.cvtColor(req.gradcam_image, cv2.COLOR_RGB2BGR))
             cam_img = r"\includegraphics[width=0.45\textwidth]{cam.jpg}"
             
-        sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
-        risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
+        sn_escaped = tex_escape(SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key))
+        risk_escaped = tex_escape(RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN"))
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        probs = "\n".join([f"\\item \\textbf{{{tex_escape(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
+        date_escaped = tex_escape(req.server_timestamp)
+        session_escaped = tex_escape(req.session_id[:16])
+        name_escaped = tex_escape(req.patient.patient_name)
+        id_escaped = tex_escape(req.patient.patient_id)
+        dob_escaped = tex_escape(req.patient.date_of_birth)
+        gender_escaped = tex_escape(req.patient.gender)
+
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
 \\usepackage{{graphicx}}
@@ -31,19 +48,19 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {date_escaped} \\quad \\textbf{{Session:}} {session_escaped}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {name_escaped} \\\\
+\\textbf{{Patient ID:}} {id_escaped} \\\\
+\\textbf{{DOB:}} {dob_escaped} \\quad \\textbf{{Gender:}} {gender_escaped}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}
 \\end{{center}}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
-\\textbf{{Prediction:}} {sn} \\\\
-\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {risk}
+\\textbf{{Prediction:}} {sn_escaped} \\\\
+\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {risk_escaped}
 \\begin{{itemize}}
 {probs}
 \\end{{itemize}}

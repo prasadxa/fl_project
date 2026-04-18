@@ -5,6 +5,23 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def latex_escape(text: str) -> str:
+    if not isinstance(text, str):
+        text = str(text)
+    conv = {
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\textasciicircum{}',
+        '\\': r'\textbackslash{}',
+    }
+    return text.translate(str.maketrans(conv))
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -21,7 +38,16 @@ def build_latex_report(req: ReportRequest) -> bytes:
         sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
         risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        probs = "\n".join([f"\\item \\textbf{{{latex_escape(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+
+        safe_ts = latex_escape(req.server_timestamp)
+        safe_sess = latex_escape(req.session_id[:16])
+        safe_name = latex_escape(req.patient.patient_name)
+        safe_id = latex_escape(req.patient.patient_id)
+        safe_dob = latex_escape(req.patient.date_of_birth)
+        safe_gender = latex_escape(req.patient.gender)
+        safe_sn = latex_escape(sn)
+        safe_risk = latex_escape(risk)
         
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
@@ -31,19 +57,19 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {safe_ts} \\quad \\textbf{{Session:}} {safe_sess}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {safe_name} \\\\
+\\textbf{{Patient ID:}} {safe_id} \\\\
+\\textbf{{DOB:}} {safe_dob} \\quad \\textbf{{Gender:}} {safe_gender}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}
 \\end{{center}}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
-\\textbf{{Prediction:}} {sn} \\\\
-\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {risk}
+\\textbf{{Prediction:}} {safe_sn} \\\\
+\\textbf{{Confidence:}} {req.ai_confidence*100:.1f}\\% \\quad \\textbf{{Risk:}} {safe_risk}
 \\begin{{itemize}}
 {probs}
 \\end{{itemize}}

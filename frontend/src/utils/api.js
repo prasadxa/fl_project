@@ -31,8 +31,29 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
+  // Intercept admin routes to append auth header
+  if (path.startsWith("/admin")) {
+    let auth = sessionStorage.getItem("adminAuth");
+    if (!auth) {
+      const user = window.prompt("Admin Username:");
+      const pass = window.prompt("Admin Password:");
+      if (!user || !pass) {
+        throw new Error("Authentication cancelled");
+      }
+      auth = btoa(`${user}:${pass}`);
+      sessionStorage.setItem("adminAuth", auth);
+    }
+    opts.headers = {
+      ...opts.headers,
+      "Authorization": `Basic ${auth}`
+    };
+  }
+
   const res = await fetch(`${BASE}${path}`, opts);
   if (!res.ok) {
+    if (res.status === 401 && path.startsWith("/admin")) {
+      sessionStorage.removeItem("adminAuth");
+    }
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
     let errorMeta = {};
@@ -139,12 +160,49 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
+async function downloadWithAuth(path, filename) {
+  let auth = sessionStorage.getItem("adminAuth");
+  if (!auth) {
+    const user = window.prompt("Admin Username:");
+    const pass = window.prompt("Admin Password:");
+    if (!user || !pass) return;
+    auth = btoa(`${user}:${pass}`);
+    sessionStorage.setItem("adminAuth", auth);
+  }
+
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { "Authorization": `Basic ${auth}` }
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      sessionStorage.removeItem("adminAuth");
+      alert("Authentication failed. Please try again.");
+    } else {
+      alert(`Download failed: ${res.statusText}`);
+    }
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  downloadWithAuth("/admin/export-csv", `tecnomate_feedback_${ts}.csv`);
 }
 
 export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  downloadWithAuth("/admin/export-excel", `tecnomate_admin_report_${ts}.xlsx`);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

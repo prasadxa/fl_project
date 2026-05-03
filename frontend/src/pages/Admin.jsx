@@ -8,15 +8,35 @@ export default function Admin() {
   const [page, setPage] = useState(0)
   const LIMIT = 20
 
+  const fetchAdminData = async () => {
+    setLoading(true);
+    try {
+      const [s, f] = await Promise.all([
+        getAdminStats(),
+        getAdminFeedback({ limit: LIMIT, offset: page * LIMIT })
+      ]);
+      setStats(s);
+      setFeedback(Array.isArray(f?.rows) ? f.rows : Array.isArray(f) ? f : []);
+    } catch (err) {
+      if (err.message && err.message.includes("401")) {
+        const user = window.prompt("Admin Username:");
+        if (user === null) return;
+        const pass = window.prompt("Admin Password:");
+        if (pass === null) return;
+        sessionStorage.setItem('adminAuth', 'Basic ' + btoa(`${user}:${pass}`));
+        fetchAdminData();
+        return;
+      }
+      setStats(null);
+      setFeedback([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      getAdminStats().catch(() => null),
-      getAdminFeedback({ limit: LIMIT, offset: page * LIMIT }).catch(() => ({ rows: [] })),
-    ]).then(([s, f]) => {
-      setStats(s)
-      setFeedback(Array.isArray(f?.rows) ? f.rows : Array.isArray(f) ? f : [])
-    }).finally(() => setLoading(false))
+    fetchAdminData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
 
   return (
@@ -24,11 +44,33 @@ export default function Admin() {
       <div className="flex items-center justify-between mb-6 fade-in">
         <h1 className="text-2xl font-extrabold text-stone-800">Admin Panel</h1>
         <div className="flex gap-2">
-          <button onClick={downloadCSV}
+          <button onClick={() => {
+            downloadCSV().catch(err => {
+              if (err.message && err.message.includes("401")) {
+                const user = window.prompt("Admin Username:");
+                if (user === null) return;
+                const pass = window.prompt("Admin Password:");
+                if (pass === null) return;
+                sessionStorage.setItem('adminAuth', 'Basic ' + btoa(`${user}:${pass}`));
+                downloadCSV();
+              }
+            });
+          }}
             className="px-4 py-2 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">
             CSV Export
           </button>
-          <button onClick={downloadExcel}
+          <button onClick={() => {
+            downloadExcel().catch(err => {
+              if (err.message && err.message.includes("401")) {
+                const user = window.prompt("Admin Username:");
+                if (user === null) return;
+                const pass = window.prompt("Admin Password:");
+                if (pass === null) return;
+                sessionStorage.setItem('adminAuth', 'Basic ' + btoa(`${user}:${pass}`));
+                downloadExcel();
+              }
+            });
+          }}
             className="px-4 py-2 rounded-xl text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition">
             Excel Export
           </button>

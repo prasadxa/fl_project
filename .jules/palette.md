@@ -1,3 +1,6 @@
 ## 2025-03-22 - Toggle Button Accessibility
 **Learning:** For custom tab or toggle button groups (like Scan Type or Report Format selectors), visual classes like `bg-teal-600 text-white` are not enough for screen readers. Using `role="group"` on the container with a proper label (`aria-labelledby` or `aria-label`), and setting `aria-pressed={isActive}` on the buttons is critical for conveying the current selection state to assistive technologies. Keyboard focus styles (like `focus-visible:ring-2`) should also be applied to these buttons since they are interactive elements.
 **Action:** Always verify that custom UI controls that act as radio buttons or tabs have appropriate ARIA roles (`group`, `radiogroup`, or `tablist`) and state attributes (`aria-pressed`, `aria-checked`, or `aria-selected`), along with clear visual focus indicators.
+## 2025-02-24 - Skip-to-Content Link Accessibility
+**Learning:** Added a "Skip to main content" link for keyboard/screen reader navigation. Learned to use `sr-only focus:not-sr-only focus:absolute focus:z-[100]` for the hidden link, and `tabIndex={-1}` with `outline-none` on the target `<main>` container to allow programmatic focus without visual artifacts.
+**Action:** Always include a skip-to-content link on pages with complex navigation headers.

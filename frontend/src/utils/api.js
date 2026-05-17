@@ -31,8 +31,26 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
+  if (path.startsWith("/admin/")) {
+    let auth = sessionStorage.getItem("adminAuth");
+    if (!auth) {
+      const username = window.prompt("Admin Username:");
+      const password = window.prompt("Admin Password:");
+      if (username && password) {
+        auth = btoa(`${username}:${password}`);
+        sessionStorage.setItem("adminAuth", auth);
+      }
+    }
+    if (auth) {
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+    }
+  }
+
   const res = await fetch(`${BASE}${path}`, opts);
   if (!res.ok) {
+    if (res.status === 401 && path.startsWith("/admin/")) {
+      sessionStorage.removeItem("adminAuth");
+    }
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
     let errorMeta = {};
@@ -139,12 +157,54 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
+async function downloadFileWithAuth(path, filename) {
+  let auth = sessionStorage.getItem("adminAuth");
+  if (!auth) {
+    const username = window.prompt("Admin Username:");
+    const password = window.prompt("Admin Password:");
+    if (username && password) {
+      auth = btoa(`${username}:${password}`);
+      sessionStorage.setItem("adminAuth", auth);
+    } else {
+      return; // Canceled or empty
+    }
+  }
+
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) sessionStorage.removeItem("adminAuth");
+    alert(`Download failed: ${res.statusText}`);
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+
+  // Try to extract filename from Content-Disposition if present
+  const disposition = res.headers.get("content-disposition");
+  if (disposition && disposition.includes("filename=")) {
+    const match = disposition.match(/filename="(.+)"/);
+    if (match) filename = match[1];
+  }
+
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+  downloadFileWithAuth("/admin/export-csv", "tecnomate_feedback.csv");
 }
 
 export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+  downloadFileWithAuth("/admin/export-excel", "tecnomate_admin_report.xlsx");
 }
 
 export async function downloadPdfReport(data, format = "latex") {

@@ -51,6 +51,8 @@ import datetime
 import io
 import json
 import logging
+import os
+import secrets
 import sys
 import threading
 import time
@@ -82,9 +84,10 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -1836,14 +1839,40 @@ async def pdf_report(
 
 # ── admin endpoints ────────────────────────────────────────────────────────────
 
+security = HTTPBasic()
 
-@app.get("/api/admin/stats", tags=["Admin"])
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    current_username_bytes = credentials.username.encode("utf8")
+    correct_username_bytes = b"admin"
+    if "ADMIN_USER" in os.environ:
+        correct_username_bytes = os.environ["ADMIN_USER"].encode("utf8")
+    is_correct_username = secrets.compare_digest(
+        current_username_bytes, correct_username_bytes
+    )
+
+    current_password_bytes = credentials.password.encode("utf8")
+    correct_password_bytes = b"admin"
+    if "ADMIN_PASS" in os.environ:
+        correct_password_bytes = os.environ["ADMIN_PASS"].encode("utf8")
+    is_correct_password = secrets.compare_digest(
+        current_password_bytes, correct_password_bytes
+    )
+    if not (is_correct_username and is_correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+@app.get("/api/admin/stats", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_stats():
     """Return aggregate statistics from the SQLite database."""
     return get_db().stats()
 
 
-@app.get("/api/admin/feedback", tags=["Admin"])
+@app.get("/api/admin/feedback", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_feedback(
     limit: int = 50,
     offset: int = 0,
@@ -1867,7 +1896,7 @@ def admin_feedback(
     }
 
 
-@app.get("/api/admin/export-csv", tags=["Admin"])
+@app.get("/api/admin/export-csv", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_export_csv():
     """Download all feedback data as a CSV file."""
     csv_data = get_db().export_feedback_csv()
@@ -1880,7 +1909,7 @@ def admin_export_csv():
     )
 
 
-@app.get("/api/admin/export-excel", tags=["Admin"])
+@app.get("/api/admin/export-excel", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_export_excel():
     """
     Download a full admin report as a formatted Excel workbook.
@@ -2233,7 +2262,7 @@ def admin_export_excel():
     )
 
 
-@app.get("/api/admin/sessions", tags=["Admin"])
+@app.get("/api/admin/sessions", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_sessions(limit: int = 50, offset: int = 0):
     """Return paginated prediction sessions."""
     return {"sessions": get_db().list_sessions(limit=min(limit, 500), offset=offset)}

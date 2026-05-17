@@ -1403,6 +1403,7 @@ export default function Classify() {
                           <select
                             value={overrideClass}
                             onChange={(e) => setOverrideClass(e.target.value)}
+                            aria-label="Override prediction"
                             className="flex-1 px-3 py-2 rounded-xl text-sm bg-white border border-stone-200 text-stone-700"
                           >
                             {topProbs.map(([cls]) => (

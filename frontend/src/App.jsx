@@ -20,6 +20,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] top-4 left-4 bg-teal-600 text-white px-4 py-2 rounded-lg font-medium shadow-lg">Skip to main content</a>
       {/* ── Navbar ── */}
       <nav className="sticky top-0 z-50 glass rounded-none"
         style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
@@ -90,7 +91,7 @@ export default function App() {
       </nav>
 
       {/* ── Page Content ── */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         <Routes>
           <Route path="/" element={<Dashboard health={health} />} />
           <Route path="/classify" element={<Classify />} />

@@ -9,6 +9,12 @@ export default function Admin() {
   const LIMIT = 20
 
   useEffect(() => {
+    if (!sessionStorage.getItem('adminAuth')) {
+      const creds = window.prompt('Enter admin credentials (username:password):')
+      if (creds) {
+        sessionStorage.setItem('adminAuth', btoa(creds))
+      }
+    }
     setLoading(true)
     Promise.all([
       getAdminStats().catch(() => null),

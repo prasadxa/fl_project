@@ -31,7 +31,14 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  const headers = new Headers(opts.headers || {});
+  if (path.startsWith("/admin/") || path.startsWith("/api/admin/")) {
+    const token = sessionStorage.getItem("adminAuth");
+    if (token) {
+      headers.set("Authorization", `Basic ${token}`);
+    }
+  }
+  const res = await fetch(`${BASE}${path}`, { ...opts, headers });
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +146,40 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const headers = {};
+  const token = sessionStorage.getItem("adminAuth");
+  if (token) headers["Authorization"] = `Basic ${token}`;
+
+  const res = await fetch(`${BASE}/admin/export-csv`, { headers });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tecnomate_feedback_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const headers = {};
+  const token = sessionStorage.getItem("adminAuth");
+  if (token) headers["Authorization"] = `Basic ${token}`;
+
+  const res = await fetch(`${BASE}/admin/export-excel`, { headers });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tecnomate_admin_report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

@@ -31,8 +31,22 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
+  if (path.startsWith("/admin/")) {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth) {
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+    }
+  }
   const res = await fetch(`${BASE}${path}`, opts);
   if (!res.ok) {
+    if (res.status === 401 && path.startsWith("/admin/")) {
+      localStorage.removeItem("admin_auth");
+      const creds = prompt("Admin Username:Password");
+      if (creds) {
+        localStorage.setItem("admin_auth", btoa(creds));
+        return request(path, opts);
+      }
+    }
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
     let errorMeta = {};
@@ -139,12 +153,44 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const opts = {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) opts.headers = { Authorization: `Basic ${auth}` };
+
+  const res = await fetch(`${BASE}/admin/export-csv`, opts);
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_feedback_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const opts = {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) opts.headers = { Authorization: `Basic ${auth}` };
+
+  const res = await fetch(`${BASE}/admin/export-excel`, opts);
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_admin_report_${ts}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

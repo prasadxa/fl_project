@@ -2,3 +2,7 @@
 **Vulnerability:** Path traversal in a catch-all route that serves static files using FastAPI path parameters.
 **Learning:** FastAPI's '{path:path}' definition decodes URL-encoded payloads like '%2e%2e%2f' after Starlette's initial sanitization, bypassing standard sanitizations and directly feeding dangerous input to 'pathlib.Path'.
 **Prevention:** Always verify paths mathematically using 'candidate.resolve().relative_to(base_dir.resolve())' instead of trusting the input when generating file paths.
+## 2024-05-24 - Missing Authentication on Admin Endpoints
+**Vulnerability:** The `/api/admin/*` endpoints were publicly accessible, exposing sensitive statistics, feedback, and session data. Additionally, the `/admin/export-csv` and `/admin/export-excel` endpoints were vulnerable to unauthorized data exfiltration.
+**Learning:** Admin routes must always require explicit authentication and authorization. In a fail-secure system, authentication mechanisms must reject requests if the underlying verification secrets (like `ADMIN_USER` and `ADMIN_PASS`) are unconfigured, rather than falling back to default values. Furthermore, file downloads that require authentication cannot use `window.open()` because it cannot pass custom headers like `Authorization`.
+**Prevention:** Always implement an authentication dependency for sensitive routes. Ensure the dependency checks for the presence of required configuration variables before attempting validation. Use `fetch()` with programmatic Blob ObjectURL generation for authenticated file downloads in the frontend.

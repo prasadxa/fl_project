@@ -31,7 +31,24 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
+  opts.headers = opts.headers || {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) {
+    opts.headers["Authorization"] = `Basic ${auth}`;
+  }
+
   const res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401 && path.startsWith("/admin")) {
+    const creds = prompt("Admin credentials required (username:password):");
+    if (creds) {
+      const b64 = btoa(creds);
+      localStorage.setItem("admin_auth", b64);
+      opts.headers["Authorization"] = `Basic ${b64}`;
+      return request(path, opts);
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +156,46 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const opts = { headers: {} };
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) opts.headers["Authorization"] = `Basic ${auth}`;
+  const res = await fetch(`${BASE}/admin/export-csv`, opts);
+  if (!res.ok) {
+    if (res.status === 401) alert("Admin authentication required. Please refresh and try again.");
+    return;
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_feedback_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const opts = { headers: {} };
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) opts.headers["Authorization"] = `Basic ${auth}`;
+  const res = await fetch(`${BASE}/admin/export-excel`, opts);
+  if (!res.ok) {
+    if (res.status === 401) alert("Admin authentication required. Please refresh and try again.");
+    return;
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_admin_report_${ts}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

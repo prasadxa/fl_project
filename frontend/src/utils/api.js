@@ -31,7 +31,22 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
+  opts.headers = opts.headers || {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) {
+    opts.headers["Authorization"] = `Basic ${auth}`;
+  }
+
   const res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401) {
+    const credentials = prompt("Admin credentials required (user:pass):");
+    if (credentials) {
+      localStorage.setItem("admin_auth", btoa(credentials));
+      window.location.reload();
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +154,28 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const res = await request('/admin/export-csv');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_feedback_${ts}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const res = await request('/admin/export-excel');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_admin_report_${ts}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

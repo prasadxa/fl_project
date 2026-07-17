@@ -31,7 +31,23 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  opts.headers = opts.headers || {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) {
+    opts.headers["Authorization"] = `Basic ${auth}`;
+  }
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401 && path.startsWith("/admin")) {
+    const creds = window.prompt("Enter admin credentials (user:pass):");
+    if (creds) {
+      const b64 = btoa(creds);
+      localStorage.setItem("admin_auth", b64);
+      opts.headers["Authorization"] = `Basic ${b64}`;
+      res = await fetch(`${BASE}${path}`, opts);
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +155,47 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
+async function _downloadAdminFile(path, filenamePrefix) {
+  const opts = { headers: {} };
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) {
+    opts.headers["Authorization"] = `Basic ${auth}`;
+  }
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401) {
+    const creds = window.prompt("Enter admin credentials (user:pass):");
+    if (creds) {
+      const b64 = btoa(creds);
+      localStorage.setItem("admin_auth", b64);
+      opts.headers["Authorization"] = `Basic ${b64}`;
+      res = await fetch(`${BASE}${path}`, opts);
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(`API ${res.status}: ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const ext = path.endsWith("excel") ? "xlsx" : "csv";
+  a.download = `tecnomate_${filenamePrefix}_${ts}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+  _downloadAdminFile("/admin/export-csv", "feedback");
 }
 
 export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+  _downloadAdminFile("/admin/export-excel", "admin_report");
 }
 
 export async function downloadPdfReport(data, format = "latex") {

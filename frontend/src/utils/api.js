@@ -31,28 +31,46 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  opts.headers = opts.headers || {};
+  const auth = localStorage.getItem("admin_auth");
+  if (auth) {
+    opts.headers["Authorization"] = `Basic ${auth}`;
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
   if (!res.ok) {
-    let msg = `API ${res.status}: ${res.statusText}`;
-    let errorCode = null;
-    let errorMeta = {};
-    try {
-      const body = await res.json();
-      if (body.detail) {
-        if (typeof body.detail === "object") {
-          // Structured error: { message, error_code, scan_type_detected, … }
-          msg = body.detail.message || JSON.stringify(body.detail);
-          errorCode = body.detail.error_code || null;
-          errorMeta = body.detail;
-        } else {
-          msg = body.detail;
-        }
+    if (res.status === 401 && path.startsWith("/admin/")) {
+      const credentials = window.prompt("Admin Access Required. Enter credentials (username:password)");
+      if (credentials) {
+        const b64 = btoa(credentials);
+        localStorage.setItem("admin_auth", b64);
+        opts.headers["Authorization"] = `Basic ${b64}`;
+        res = await fetch(`${BASE}${path}`, opts);
       }
-    } catch {}
-    const err = new Error(msg);
-    if (errorCode) err.errorCode = errorCode;
-    if (errorMeta) err.errorMeta = errorMeta;
-    throw err;
+    }
+
+    if (!res.ok) {
+      let msg = `API ${res.status}: ${res.statusText}`;
+      let errorCode = null;
+      let errorMeta = {};
+      try {
+        const body = await res.json();
+        if (body.detail) {
+          if (typeof body.detail === "object") {
+            // Structured error: { message, error_code, scan_type_detected, … }
+            msg = body.detail.message || JSON.stringify(body.detail);
+            errorCode = body.detail.error_code || null;
+            errorMeta = body.detail;
+          } else {
+            msg = body.detail;
+          }
+        }
+      } catch {}
+      const err = new Error(msg);
+      if (errorCode) err.errorCode = errorCode;
+      if (errorMeta) err.errorMeta = errorMeta;
+      throw err;
+    }
   }
   return res;
 }
@@ -139,12 +157,32 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const res = await request(`/admin/export-csv`);
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_feedback_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const res = await request(`/admin/export-excel`);
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_admin_report_${ts}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

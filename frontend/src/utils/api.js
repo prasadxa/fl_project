@@ -31,7 +31,27 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  let is_admin_route = path.startsWith('/admin/');
+  if (is_admin_route) {
+    opts.headers = opts.headers || {};
+    const adminAuth = localStorage.getItem('admin_auth');
+    if (adminAuth) {
+      opts.headers['Authorization'] = `Basic ${adminAuth}`;
+    }
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (is_admin_route && res.status === 401) {
+    const userInput = prompt("Admin Login (Format: username:password)");
+    if (userInput) {
+      const b64 = btoa(userInput);
+      localStorage.setItem('admin_auth', b64);
+      opts.headers['Authorization'] = `Basic ${b64}`;
+      res = await fetch(`${BASE}${path}`, opts);
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +159,32 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const res = await request('/admin/export-csv');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_feedback_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const res = await request('/admin/export-excel');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `tecnomate_admin_report_${ts}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

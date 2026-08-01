@@ -82,9 +82,12 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+import os
+import secrets
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -114,6 +117,18 @@ from scan_classifier import CONFIDENCE_THRESHOLD as GATE_THRESHOLD
 from scan_classifier import get_scan_gate
 
 from dataset import CLASS_NAMES, NUM_CLASSES
+
+# ── auth ───────────────────────────────────────────────────────────────────────
+_security = HTTPBasic()
+
+def verify_admin(creds: HTTPBasicCredentials = Depends(_security)):
+    u = os.environ.get("ADMIN_USER")
+    p = os.environ.get("ADMIN_PASS")
+    if not u or not p:
+        raise HTTPException(status_code=500, detail="Admin auth not configured")
+    if not (secrets.compare_digest(creds.username, u) and secrets.compare_digest(creds.password, p)):
+        raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+    return creds.username
 
 # ── paths ──────────────────────────────────────────────────────────────────────
 PROJ_ROOT = Path(__file__).parent.parent
@@ -1837,13 +1852,13 @@ async def pdf_report(
 # ── admin endpoints ────────────────────────────────────────────────────────────
 
 
-@app.get("/api/admin/stats", tags=["Admin"])
+@app.get("/api/admin/stats", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_stats():
     """Return aggregate statistics from the SQLite database."""
     return get_db().stats()
 
 
-@app.get("/api/admin/feedback", tags=["Admin"])
+@app.get("/api/admin/feedback", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_feedback(
     limit: int = 50,
     offset: int = 0,
@@ -1867,7 +1882,7 @@ def admin_feedback(
     }
 
 
-@app.get("/api/admin/export-csv", tags=["Admin"])
+@app.get("/api/admin/export-csv", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_export_csv():
     """Download all feedback data as a CSV file."""
     csv_data = get_db().export_feedback_csv()
@@ -1880,7 +1895,7 @@ def admin_export_csv():
     )
 
 
-@app.get("/api/admin/export-excel", tags=["Admin"])
+@app.get("/api/admin/export-excel", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_export_excel():
     """
     Download a full admin report as a formatted Excel workbook.
@@ -2233,7 +2248,7 @@ def admin_export_excel():
     )
 
 
-@app.get("/api/admin/sessions", tags=["Admin"])
+@app.get("/api/admin/sessions", tags=["Admin"], dependencies=[Depends(verify_admin)])
 def admin_sessions(limit: int = 50, offset: int = 0):
     """Return paginated prediction sessions."""
     return {"sessions": get_db().list_sessions(limit=min(limit, 500), offset=offset)}

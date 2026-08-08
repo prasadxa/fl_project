@@ -78,11 +78,14 @@ if not _audit_logger.handlers:
 
 import re
 
+import os
+import secrets
 import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from PIL import Image
@@ -1836,9 +1839,31 @@ async def pdf_report(
 
 # ── admin endpoints ────────────────────────────────────────────────────────────
 
+security = HTTPBasic()
+
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    admin_user = os.environ.get("ADMIN_USER")
+    admin_pass = os.environ.get("ADMIN_PASS")
+
+    if not admin_user or not admin_pass:
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: Admin credentials are not set."
+        )
+
+    correct_username = secrets.compare_digest(credentials.username, admin_user)
+    correct_password = secrets.compare_digest(credentials.password, admin_pass)
+
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 @app.get("/api/admin/stats", tags=["Admin"])
-def admin_stats():
+def admin_stats(admin: str = Depends(verify_admin)):
     """Return aggregate statistics from the SQLite database."""
     return get_db().stats()
 
@@ -1849,6 +1874,7 @@ def admin_feedback(
     offset: int = 0,
     overridden_only: bool = False,
     scan_type: str = "",
+    admin: str = Depends(verify_admin)
 ):
     """Return paginated feedback records."""
     db = get_db()
@@ -1868,7 +1894,7 @@ def admin_feedback(
 
 
 @app.get("/api/admin/export-csv", tags=["Admin"])
-def admin_export_csv():
+def admin_export_csv(admin: str = Depends(verify_admin)):
     """Download all feedback data as a CSV file."""
     csv_data = get_db().export_feedback_csv()
     ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1881,7 +1907,7 @@ def admin_export_csv():
 
 
 @app.get("/api/admin/export-excel", tags=["Admin"])
-def admin_export_excel():
+def admin_export_excel(admin: str = Depends(verify_admin)):
     """
     Download a full admin report as a formatted Excel workbook.
 
@@ -2234,7 +2260,7 @@ def admin_export_excel():
 
 
 @app.get("/api/admin/sessions", tags=["Admin"])
-def admin_sessions(limit: int = 50, offset: int = 0):
+def admin_sessions(limit: int = 50, offset: int = 0, admin: str = Depends(verify_admin)):
     """Return paginated prediction sessions."""
     return {"sessions": get_db().list_sessions(limit=min(limit, 500), offset=offset)}
 

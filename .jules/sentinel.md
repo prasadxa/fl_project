@@ -1,4 +1,4 @@
-## 2024-03-22 - [FastAPI Path Parameter URL-Decoding Bug]
-**Vulnerability:** Path traversal in a catch-all route that serves static files using FastAPI path parameters.
-**Learning:** FastAPI's '{path:path}' definition decodes URL-encoded payloads like '%2e%2e%2f' after Starlette's initial sanitization, bypassing standard sanitizations and directly feeding dangerous input to 'pathlib.Path'.
-**Prevention:** Always verify paths mathematically using 'candidate.resolve().relative_to(base_dir.resolve())' instead of trusting the input when generating file paths.
+## 2025-02-27 - Unprotected Admin Endpoints and Insecure Exports
+**Vulnerability:** Five backend administrative endpoints (`/api/admin/*`) lacked any authentication controls. Any user could access aggregate statistics, paginated feedback logs, and trigger direct CSV/Excel data exports revealing clinician and AI predictions. Additionally, the frontend triggered CSV and Excel exports using `window.open()`, which is fundamentally incompatible with passing authorization headers.
+**Learning:** Relying purely on UI obscurity (e.g. hiding the `/admin` route or its link) without enforcing authentication at the FastAPI layer leaves all sensitive backend logic exposed. Furthermore, implementing custom authentication on file-download routes requires rewriting frontend code from a basic `window.open` to a programmatically handled `fetch` returning a blob to support appending header values.
+**Prevention:** Implement `Depends(HTTPBasic)` across all privileged endpoints and decouple credential evaluation from hardcoded defaults. For frontend file downloads requiring auth headers, use `res.blob()` and programmatic <a> tags leveraging `window.URL.createObjectURL()`.

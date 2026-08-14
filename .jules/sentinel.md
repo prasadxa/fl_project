@@ -1,4 +1,4 @@
-## 2024-03-22 - [FastAPI Path Parameter URL-Decoding Bug]
-**Vulnerability:** Path traversal in a catch-all route that serves static files using FastAPI path parameters.
-**Learning:** FastAPI's '{path:path}' definition decodes URL-encoded payloads like '%2e%2e%2f' after Starlette's initial sanitization, bypassing standard sanitizations and directly feeding dangerous input to 'pathlib.Path'.
-**Prevention:** Always verify paths mathematically using 'candidate.resolve().relative_to(base_dir.resolve())' instead of trusting the input when generating file paths.
+## 2025-02-14 - Missing Authentication on Admin Endpoints
+**Vulnerability:** The `/api/admin/*` endpoints exposed aggregate statistics, feedback logs, data exports, and prediction sessions without requiring any authentication, making sensitive administrative data publicly accessible.
+**Learning:** Hardcoding credentials or applying no authentication exposes an application to data leakage and unauthorized access. It is vital to implement secure fail-states, such as returning HTTP 500 when sensitive configuration (like credentials) is missing, rather than failing insecurely or defaulting to insecure behaviors.
+**Prevention:** Ensured strict authentication by adding a dependency `verify_admin` to all admin routes. The check retrieves credentials securely from environment variables and uses `secrets.compare_digest` to prevent timing attacks. Implemented a secure fail-state by returning a 500 Internal Server Error when credentials are not configured in the environment.

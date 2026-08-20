@@ -31,7 +31,29 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  opts.headers = opts.headers || {};
+  if (path.startsWith("/admin/")) {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth) {
+      opts.headers["Authorization"] = `Basic ${auth}`;
+    }
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401 && path.startsWith("/admin/")) {
+    const user = prompt("Admin Username:");
+    if (user !== null) {
+      const pass = prompt("Admin Password:");
+      if (pass !== null) {
+        const token = btoa(`${user}:${pass}`);
+        localStorage.setItem("admin_auth", token);
+        opts.headers["Authorization"] = `Basic ${token}`;
+        res = await fetch(`${BASE}${path}`, opts);
+      }
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +161,16 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const res = await request("/admin/export-csv");
+  const blob = await res.blob();
+  _triggerDownload(blob, `tecnomate_feedback_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const res = await request("/admin/export-excel");
+  const blob = await res.blob();
+  _triggerDownload(blob, `tecnomate_admin_report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
 }
 
 export async function downloadPdfReport(data, format = "latex") {
@@ -174,11 +200,14 @@ export async function downloadPdfReport(data, format = "latex") {
   }
 
   const blob = await res.blob();
+  _triggerDownload(blob, `tecnomate_report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+}
+
+function _triggerDownload(blob, filename) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  a.download = `tecnomate_report_${ts}.pdf`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();

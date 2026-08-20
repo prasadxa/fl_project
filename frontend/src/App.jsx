@@ -5,6 +5,7 @@ import Classify from './pages/Classify'
 import History from './pages/History'
 import Admin from './pages/Admin'
 import { getHealth } from './utils/api'
+import SkipLink from './components/SkipLink'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '📊' },
@@ -20,6 +21,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SkipLink />
       {/* ── Navbar ── */}
       <nav className="sticky top-0 z-50 glass rounded-none"
         style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
@@ -90,7 +92,7 @@ export default function App() {
       </nav>
 
       {/* ── Page Content ── */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex="-1" className="flex-1 focus:outline-none">
         <Routes>
           <Route path="/" element={<Dashboard health={health} />} />
           <Route path="/classify" element={<Classify />} />

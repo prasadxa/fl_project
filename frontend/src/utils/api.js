@@ -31,7 +31,34 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  if (path.startsWith("/admin/")) {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth) {
+      opts.headers = {
+        ...opts.headers,
+        Authorization: `Basic ${auth}`,
+      };
+    }
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (!res.ok && res.status === 401 && path.startsWith("/admin/")) {
+    const username = prompt("Admin Username:");
+    if (!username) throw new Error("Admin credentials required");
+    const password = prompt("Admin Password:");
+    if (!password) throw new Error("Admin credentials required");
+
+    const auth = btoa(`${username}:${password}`);
+    localStorage.setItem("admin_auth", auth);
+
+    opts.headers = {
+      ...opts.headers,
+      Authorization: `Basic ${auth}`,
+    };
+    res = await fetch(`${BASE}${path}`, opts);
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +166,52 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+export async function downloadCSV() {
+  const auth = localStorage.getItem("admin_auth");
+  const headers = auth ? { Authorization: `Basic ${auth}` } : {};
+  const res = await fetch(`${BASE}/admin/export-csv`, { headers });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      alert("Please login via the admin panel first to set credentials.");
+    }
+    throw new Error(`Failed to download CSV: ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const match = res.headers.get("Content-Disposition")?.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+  a.download = match && match[1] ? match[1].replace(/['"]/g, '') : "export.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadExcel() {
+  const auth = localStorage.getItem("admin_auth");
+  const headers = auth ? { Authorization: `Basic ${auth}` } : {};
+  const res = await fetch(`${BASE}/admin/export-excel`, { headers });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      alert("Please login via the admin panel first to set credentials.");
+    }
+    throw new Error(`Failed to download Excel: ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const match = res.headers.get("Content-Disposition")?.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+  a.download = match && match[1] ? match[1].replace(/['"]/g, '') : "export.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

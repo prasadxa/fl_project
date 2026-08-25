@@ -51,6 +51,8 @@ import datetime
 import io
 import json
 import logging
+import os
+import secrets
 import sys
 import threading
 import time
@@ -82,9 +84,10 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -216,6 +219,28 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+security = HTTPBasic()
+
+def get_current_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    expected_user = os.getenv("ADMIN_USER")
+    expected_pass = os.getenv("ADMIN_PASS")
+    if not expected_user or not expected_pass:
+        raise HTTPException(
+            status_code=500,
+            detail="Admin credentials are not configured on the server."
+        )
+
+    is_user_ok = secrets.compare_digest(credentials.username.encode("utf-8"), expected_user.encode("utf-8"))
+    is_pass_ok = secrets.compare_digest(credentials.password.encode("utf-8"), expected_pass.encode("utf-8"))
+
+    if not (is_user_ok and is_pass_ok):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect admin username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 # ── Security headers middleware ────────────────────────────────────────────────
@@ -1838,7 +1863,7 @@ async def pdf_report(
 
 
 @app.get("/api/admin/stats", tags=["Admin"])
-def admin_stats():
+def admin_stats(admin: str = Depends(get_current_admin)):
     """Return aggregate statistics from the SQLite database."""
     return get_db().stats()
 
@@ -1849,6 +1874,7 @@ def admin_feedback(
     offset: int = 0,
     overridden_only: bool = False,
     scan_type: str = "",
+    admin: str = Depends(get_current_admin),
 ):
     """Return paginated feedback records."""
     db = get_db()
@@ -1868,7 +1894,7 @@ def admin_feedback(
 
 
 @app.get("/api/admin/export-csv", tags=["Admin"])
-def admin_export_csv():
+def admin_export_csv(admin: str = Depends(get_current_admin)):
     """Download all feedback data as a CSV file."""
     csv_data = get_db().export_feedback_csv()
     ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1881,7 +1907,7 @@ def admin_export_csv():
 
 
 @app.get("/api/admin/export-excel", tags=["Admin"])
-def admin_export_excel():
+def admin_export_excel(admin: str = Depends(get_current_admin)):
     """
     Download a full admin report as a formatted Excel workbook.
 
@@ -2234,7 +2260,7 @@ def admin_export_excel():
 
 
 @app.get("/api/admin/sessions", tags=["Admin"])
-def admin_sessions(limit: int = 50, offset: int = 0):
+def admin_sessions(limit: int = 50, offset: int = 0, admin: str = Depends(get_current_admin)):
     """Return paginated prediction sessions."""
     return {"sessions": get_db().list_sessions(limit=min(limit, 500), offset=offset)}
 

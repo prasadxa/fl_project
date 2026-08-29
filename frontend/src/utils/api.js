@@ -31,7 +31,30 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  const isServerRoute = path.startsWith("/admin");
+  const getHeaders = () => {
+    const headers = { ...(opts.headers || {}) };
+    if (isServerRoute) {
+      const auth = localStorage.getItem("admin_auth");
+      if (auth) {
+        headers["Authorization"] = `Basic ${auth}`;
+      }
+    }
+    return headers;
+  };
+
+  opts.headers = getHeaders();
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (isServerRoute && res.status === 401) {
+    const credentials = prompt("Admin credentials (username:password):");
+    if (credentials) {
+      localStorage.setItem("admin_auth", btoa(credentials));
+      opts.headers = getHeaders();
+      res = await fetch(`${BASE}${path}`, opts);
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -139,12 +162,36 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
   ).json();
 }
 
-export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+async function triggerDownload(res) {
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+
+  const disposition = res.headers.get("Content-Disposition");
+  let filename = "download";
+  if (disposition) {
+    const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+    if (match != null && match[1]) {
+      filename = match[1].replace(/['"]/g, "");
+    }
+  }
+
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
-export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+export async function downloadCSV() {
+  const res = await request("/admin/export-csv");
+  await triggerDownload(res);
+}
+
+export async function downloadExcel() {
+  const res = await request("/admin/export-excel");
+  await triggerDownload(res);
 }
 
 export async function downloadPdfReport(data, format = "latex") {

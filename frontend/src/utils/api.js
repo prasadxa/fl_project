@@ -31,7 +31,25 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  if (path.includes("/admin")) {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth) {
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+    }
+  }
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401 && path.includes("/admin")) {
+    const user = prompt("Admin Username:");
+    const pass = prompt("Admin Password:");
+    if (user && pass) {
+      const auth = btoa(`${user}:${pass}`);
+      localStorage.setItem("admin_auth", auth);
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+      res = await fetch(`${BASE}${path}`, opts);
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -48,7 +66,9 @@ async function request(path, opts = {}) {
           msg = body.detail;
         }
       }
-    } catch {}
+    } catch (e) {
+      void e;
+    }
     const err = new Error(msg);
     if (errorCode) err.errorCode = errorCode;
     if (errorMeta) err.errorMeta = errorMeta;
@@ -81,7 +101,9 @@ export async function ocrCheck(file, scanType = "Chest X-Ray") {
           typeof body.detail === "object"
             ? body.detail.message || JSON.stringify(body.detail)
             : body.detail;
-    } catch {}
+    } catch (e) {
+      void e;
+    }
     throw new Error(msg);
   }
   return res.json();
@@ -169,7 +191,9 @@ export async function downloadPdfReport(data, format = "latex") {
     try {
       const body = await res.json();
       if (body.detail) msg = body.detail;
-    } catch {}
+    } catch (e) {
+      void e;
+    }
     throw new Error(msg);
   }
 

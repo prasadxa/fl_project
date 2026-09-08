@@ -107,3 +107,4 @@ htmlcov/
 
 # ── Streamlit ─────────────────────────────────────────────────────────────────
 .streamlit/secrets.toml
+node_modules/

@@ -31,7 +31,28 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  // Inject credentials for admin endpoints if available
+  if (path.includes("/admin")) {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth) {
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+    }
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  // Handle 401 Unauthorized for admin endpoints
+  if (res.status === 401 && path.includes("/admin")) {
+    const user = prompt("Admin Username:");
+    const pass = prompt("Admin Password:");
+    if (user && pass) {
+      const auth = btoa(`${user}:${pass}`);
+      localStorage.setItem("admin_auth", auth);
+      opts.headers = { ...opts.headers, Authorization: `Basic ${auth}` };
+      res = await fetch(`${BASE}${path}`, opts); // Retry with credentials
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;
@@ -48,7 +69,7 @@ async function request(path, opts = {}) {
           msg = body.detail;
         }
       }
-    } catch {}
+    } catch (e) { void e; }
     const err = new Error(msg);
     if (errorCode) err.errorCode = errorCode;
     if (errorMeta) err.errorMeta = errorMeta;
@@ -81,7 +102,7 @@ export async function ocrCheck(file, scanType = "Chest X-Ray") {
           typeof body.detail === "object"
             ? body.detail.message || JSON.stringify(body.detail)
             : body.detail;
-    } catch {}
+    } catch (e) { void e; }
     throw new Error(msg);
   }
   return res.json();
@@ -140,11 +161,37 @@ export async function getAdminSessions({ limit = 50, offset = 0 } = {}) {
 }
 
 export function downloadCSV() {
-  window.open(`${BASE}/admin/export-csv`, "_blank");
+  const auth = localStorage.getItem("admin_auth");
+  if (!auth) return;
+  fetch(`${BASE}/admin/export-csv`, {
+    headers: { Authorization: `Basic ${auth}` }
+  }).then(async res => {
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tecnomate_feedback.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }).catch(e => alert(e.message));
 }
 
 export function downloadExcel() {
-  window.open(`${BASE}/admin/export-excel`, "_blank");
+  const auth = localStorage.getItem("admin_auth");
+  if (!auth) return;
+  fetch(`${BASE}/admin/export-excel`, {
+    headers: { Authorization: `Basic ${auth}` }
+  }).then(async res => {
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tecnomate_admin_report.xlsx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }).catch(e => alert(e.message));
 }
 
 export async function downloadPdfReport(data, format = "latex") {
@@ -169,7 +216,7 @@ export async function downloadPdfReport(data, format = "latex") {
     try {
       const body = await res.json();
       if (body.detail) msg = body.detail;
-    } catch {}
+    } catch (e) { void e; }
     throw new Error(msg);
   }
 

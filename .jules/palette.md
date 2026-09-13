@@ -1,3 +1,7 @@
 ## 2025-03-22 - Toggle Button Accessibility
 **Learning:** For custom tab or toggle button groups (like Scan Type or Report Format selectors), visual classes like `bg-teal-600 text-white` are not enough for screen readers. Using `role="group"` on the container with a proper label (`aria-labelledby` or `aria-label`), and setting `aria-pressed={isActive}` on the buttons is critical for conveying the current selection state to assistive technologies. Keyboard focus styles (like `focus-visible:ring-2`) should also be applied to these buttons since they are interactive elements.
 **Action:** Always verify that custom UI controls that act as radio buttons or tabs have appropriate ARIA roles (`group`, `radiogroup`, or `tablist`) and state attributes (`aria-pressed`, `aria-checked`, or `aria-selected`), along with clear visual focus indicators.
+
+## 2025-03-22 - Pagination Navigation Accessibility
+**Learning:** Pagination controls (like 'Prev' and 'Next' buttons) that rely solely on visible text can be confusing for screen reader users without broader context. Adding a descriptive `aria-label` (e.g., "Previous page") to these standard UI controls is a simple but highly effective way to improve the navigation experience and clarify the action.
+**Action:** Always verify that pagination or step-navigation buttons explicitly describe their destination or action via `aria-label`, especially when the visual text is truncated or abbreviated (like "Prev").

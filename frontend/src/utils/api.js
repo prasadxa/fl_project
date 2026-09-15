@@ -30,8 +30,26 @@ export function canonicalizeScanType(scanType) {
   return scanType.trim().replace(/\s+/g, " ");
 }
 
+let cachedAdminAuth = null;
+
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  let headers = new Headers(opts.headers || {});
+  if (cachedAdminAuth && path.includes("/admin")) {
+    headers.set("Authorization", cachedAdminAuth);
+  }
+
+  let res = await fetch(`${BASE}${path}`, { ...opts, headers });
+
+  if (res.status === 401 && path.includes("/admin")) {
+    const user = prompt("Admin Username:");
+    const pass = prompt("Admin Password:");
+    if (user && pass) {
+      cachedAdminAuth = "Basic " + btoa(user + ":" + pass);
+      headers.set("Authorization", cachedAdminAuth);
+      res = await fetch(`${BASE}${path}`, { ...opts, headers });
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;

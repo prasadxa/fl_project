@@ -9,7 +9,6 @@ export default function Admin() {
   const LIMIT = 20
 
   useEffect(() => {
-    setLoading(true)
     Promise.all([
       getAdminStats().catch(() => null),
       getAdminFeedback({ limit: LIMIT, offset: page * LIMIT }).catch(() => ({ rows: [] })),
@@ -89,7 +88,10 @@ export default function Admin() {
             </svg>
           </div>
         ) : feedback.length === 0 ? (
-          <div className="p-12 text-center text-stone-400 text-sm">No feedback entries yet</div>
+          <div className="p-12 text-center text-stone-400">
+            <div className="text-4xl mb-2 opacity-40">📭</div>
+            <p className="text-sm">No feedback entries yet</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -126,14 +128,14 @@ export default function Admin() {
         )}
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3 bg-stone-50/40"
+        <div role="navigation" aria-label="Pagination" className="flex items-center justify-between px-5 py-3 bg-stone-50/40"
           style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+          <button onClick={() => { setLoading(true); setPage(p => Math.max(0, p - 1)) }} disabled={page === 0}
             className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
             Prev
           </button>
           <span className="text-xs text-stone-400">Page {page + 1}</span>
-          <button onClick={() => setPage(p => p + 1)} disabled={feedback.length < LIMIT}
+          <button onClick={() => { setLoading(true); setPage(p => p + 1) }} disabled={feedback.length < LIMIT}
             className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
             Next
           </button>

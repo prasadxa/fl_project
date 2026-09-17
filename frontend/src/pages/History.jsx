@@ -8,7 +8,6 @@ export default function History() {
   const LIMIT = 20
 
   useEffect(() => {
-    setLoading(true)
     getAdminSessions({ limit: LIMIT, offset: page * LIMIT })
       .then(data => setSessions(data.sessions || data || []))
       .catch(() => setSessions([]))
@@ -77,14 +76,14 @@ export default function History() {
         )}
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3 bg-stone-50/40"
+        <div role="navigation" aria-label="Pagination" className="flex items-center justify-between px-5 py-3 bg-stone-50/40"
           style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+          <button onClick={() => { setLoading(true); setPage(p => Math.max(0, p - 1)) }} disabled={page === 0}
             className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
             Prev
           </button>
           <span className="text-xs text-stone-400">Page {page + 1}</span>
-          <button onClick={() => setPage(p => p + 1)} disabled={sessions.length < LIMIT}
+          <button onClick={() => { setLoading(true); setPage(p => p + 1) }} disabled={sessions.length < LIMIT}
             className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
             Next
           </button>

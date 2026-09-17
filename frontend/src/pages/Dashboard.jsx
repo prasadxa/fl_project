@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHealth, getModelInfo, getAdminStats } from '../utils/api'
+import { getModelInfo } from '../utils/api'
 
 function StatCard({ icon, label, value, sub, color }) {
   return (
@@ -30,11 +30,9 @@ function ClassCard({ name, shortName, colour }) {
 
 export default function Dashboard({ health }) {
   const [info, setInfo] = useState(null)
-  const [stats, setStats] = useState(null)
 
   useEffect(() => {
     getModelInfo().then(setInfo).catch(() => {})
-    getAdminStats().then(setStats).catch(() => {})
   }, [])
 
   const modelParams = '11.2M'

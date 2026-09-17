@@ -128,7 +128,8 @@ async function browserVisualCheck(file, scanType) {
   let stats;
   try {
     stats = await analyseImageColour(file);
-  } catch {
+  } catch (e) {
+    void e;
     // If analysis fails, let the server decide
     return null;
   }
@@ -230,7 +231,6 @@ function isLikelyNonMedical(result) {
   const probs = Object.values(result.all_probabilities);
   const topConf = result.confidence || 0;
   const count = probs.length || 1;
-  const evenDist = 1 / count;
   const avgProb = probs.reduce((a, b) => a + b, 0) / count;
   const spreadRatio = avgProb > 0 ? topConf / avgProb : 999;
   // Low confidence AND probabilities are roughly uniform => not a real scan
@@ -900,7 +900,7 @@ export default function Classify() {
         scan_type: scanType,
       });
       setFbSent(true);
-    } catch {}
+    } catch (e) { void e; }
   };
   const [overrideClass, setOverrideClass] = useState("");
 

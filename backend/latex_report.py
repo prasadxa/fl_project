@@ -5,6 +5,31 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def escape_latex(text: str) -> str:
+    """Escape special LaTeX characters to prevent LaTeX injection."""
+    if not text:
+        return ""
+    text = str(text)
+    # 1. Replace backslashes first to avoid double escaping
+    text = text.replace('\\', '___BACKSLASH___')
+    # 2. Replace other special characters
+    specials = {
+        '&': '\\&',
+        '%': '\\%',
+        '$': '\\$',
+        '#': '\\#',
+        '_': '\\_',
+        '{': '\\{',
+        '}': '\\}',
+        '~': '\\textasciitilde{}',
+        '^': '\\textasciicircum{}',
+    }
+    for k, v in specials.items():
+        text = text.replace(k, v)
+    # 3. Restore backslashes
+    text = text.replace('___BACKSLASH___', '\\textbackslash{}')
+    return text
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -23,6 +48,14 @@ def build_latex_report(req: ReportRequest) -> bytes:
         
         probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
+        # Escape user-controlled inputs
+        safe_patient_name = escape_latex(req.patient.patient_name)
+        safe_patient_id = escape_latex(req.patient.patient_id)
+        safe_dob = escape_latex(req.patient.date_of_birth)
+        safe_gender = escape_latex(req.patient.gender)
+        safe_timestamp = escape_latex(req.server_timestamp)
+        safe_session_id = escape_latex(req.session_id[:16])
+
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
 \\usepackage{{graphicx}}
@@ -31,12 +64,12 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {safe_timestamp} \\quad \\textbf{{Session:}} {safe_session_id}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {safe_patient_name} \\\\
+\\textbf{{Patient ID:}} {safe_patient_id} \\\\
+\\textbf{{DOB:}} {safe_dob} \\quad \\textbf{{Gender:}} {safe_gender}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

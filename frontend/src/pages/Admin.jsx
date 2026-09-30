@@ -127,14 +127,18 @@ export default function Admin() {
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-5 py-3 bg-stone-50/40"
-          style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+          style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}
+          role="navigation"
+          aria-label="Pagination">
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition"
+            aria-label="Previous page">
             Prev
           </button>
           <span className="text-xs text-stone-400">Page {page + 1}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={feedback.length < LIMIT}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition">
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white border border-stone-200 text-stone-600 disabled:opacity-40 hover:bg-stone-50 transition"
+            aria-label="Next page">
             Next
           </button>
         </div>

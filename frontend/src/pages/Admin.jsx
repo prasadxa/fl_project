@@ -1,23 +1,62 @@
 import { useState, useEffect } from 'react'
-import { getAdminStats, getAdminFeedback, downloadCSV, downloadExcel } from '../utils/api'
+import { getAdminStats, getAdminFeedback, downloadCSV, downloadExcel, setAdminAuth } from '../utils/api'
 
 export default function Admin() {
   const [stats, setStats] = useState(null)
   const [feedback, setFeedback] = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
+  const [needsAuth, setNeedsAuth] = useState(false)
+  const [user, setUser] = useState('')
+  const [pass, setPass] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
   const LIMIT = 20
 
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      getAdminStats().catch(() => null),
-      getAdminFeedback({ limit: LIMIT, offset: page * LIMIT }).catch(() => ({ rows: [] })),
+      getAdminStats().catch(err => err),
+      getAdminFeedback({ limit: LIMIT, offset: page * LIMIT }).catch(err => err),
     ]).then(([s, f]) => {
-      setStats(s)
-      setFeedback(Array.isArray(f?.rows) ? f.rows : Array.isArray(f) ? f : [])
+      if (s?.errorCode === 'UNAUTHORIZED' || f?.errorCode === 'UNAUTHORIZED') {
+        setNeedsAuth(true)
+        setLoading(false)
+        return
+      }
+      setStats(s?.errorCode ? null : s)
+      const rows = f?.errorCode ? [] : f?.rows
+      f = f?.errorCode ? [] : f
+      setFeedback(Array.isArray(rows) ? rows : Array.isArray(f) ? f : [])
     }).finally(() => setLoading(false))
-  }, [page])
+  }, [page, retryCount])
+
+  if (needsAuth) {
+    return (
+      <div className="max-w-md mx-auto mt-12 p-6 glass rounded-2xl">
+        <h2 className="text-xl font-bold mb-4 text-stone-800">Admin Authentication Required</h2>
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          setAdminAuth(user, pass)
+          setNeedsAuth(false)
+          setRetryCount(c => c + 1)
+        }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-600 mb-1">Username</label>
+            <input type="text" value={user} onChange={e => setUser(e.target.value)} required
+              className="w-full px-3 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-600 mb-1">Password</label>
+            <input type="password" value={pass} onChange={e => setPass(e.target.value)} required
+              className="w-full px-3 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+          </div>
+          <button type="submit" className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-xl transition">
+            Login
+          </button>
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

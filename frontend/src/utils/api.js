@@ -15,6 +15,16 @@ export const STRICT_OCR_SCAN_TYPES = ["Chest X-Ray", "Brain MRI"];
 // ── Scan type canonicalization ─────────────────────────────────────────────────
 // Normalizes scan type strings to canonical values expected by the backend.
 // Handles case differences, extra spaces, dashes, and common aliases.
+let cachedAuth = null;
+
+export function setAdminAuth(user, pass) {
+  cachedAuth = 'Basic ' + btoa(user + ':' + pass);
+}
+
+export function clearAdminAuth() {
+  cachedAuth = null;
+}
+
 export function canonicalizeScanType(scanType) {
   if (!scanType) return "unknown";
   // Normalize: lowercase, remove non-alphanumeric chars
@@ -31,10 +41,15 @@ export function canonicalizeScanType(scanType) {
 }
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  if (path.includes('/admin')) {
+    opts.headers = { ...opts.headers };
+    if (cachedAuth) opts.headers['Authorization'] = cachedAuth;
+  }
+  let res = await fetch(`${BASE}${path}`, opts);
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
-    let errorCode = null;
+    let errorCode = res.status === 401 ? 'UNAUTHORIZED' : null;
     let errorMeta = {};
     try {
       const body = await res.json();

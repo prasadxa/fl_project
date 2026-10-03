@@ -30,8 +30,30 @@ export function canonicalizeScanType(scanType) {
   return scanType.trim().replace(/\s+/g, " ");
 }
 
+let cachedAuth = null;
+
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts);
+  if (path.includes("/admin")) {
+    opts.headers = opts.headers || {};
+    if (cachedAuth) {
+      opts.headers["Authorization"] = cachedAuth;
+    }
+  }
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401 && path.includes("/admin")) {
+    const creds = prompt("Admin credentials required (username:password):");
+    if (creds) {
+      cachedAuth = "Basic " + btoa(creds);
+      opts.headers["Authorization"] = cachedAuth;
+      res = await fetch(`${BASE}${path}`, opts);
+      if (res.status === 401) {
+        cachedAuth = null; // Clear if retry also fails
+      }
+    }
+  }
+
   if (!res.ok) {
     let msg = `API ${res.status}: ${res.statusText}`;
     let errorCode = null;

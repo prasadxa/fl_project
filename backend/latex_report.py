@@ -5,6 +5,31 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def escape_text(text) -> str:
+    if text is None:
+        return ""
+
+    text = str(text)
+
+    # First, replace backslashes with a placeholder
+    text = text.replace("\\", "BACKSLASHPLACEHOLDER")
+
+    # Escape other special LaTeX characters
+    text = text.replace("&", "\\&")
+    text = text.replace("%", "\\%")
+    text = text.replace("$", "\\$")
+    text = text.replace("#", "\\#")
+    text = text.replace("_", "\\_")
+    text = text.replace("{", "\\{")
+    text = text.replace("}", "\\}")
+    text = text.replace("~", "\\textasciitilde{}")
+    text = text.replace("^", "\\textasciicircum{}")
+
+    # Finally, replace the placeholder with the LaTeX backslash command
+    text = text.replace("BACKSLASHPLACEHOLDER", "\\textbackslash{}")
+
+    return text
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -34,9 +59,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {escape_text(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {escape_text(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {escape_text(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {escape_text(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

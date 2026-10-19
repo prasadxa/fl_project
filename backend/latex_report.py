@@ -5,6 +5,22 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def fix_chars(text: str) -> str:
+    if not isinstance(text, str):
+        return str(text)
+    text = text.replace('\\', 'BACKSLASHPLACEHOLDER')
+    text = text.replace('{', '\\{')
+    text = text.replace('}', '\\}')
+    text = text.replace('_', '\\_')
+    text = text.replace('^', '\\^{}')
+    text = text.replace('#', '\\#')
+    text = text.replace('&', '\\&')
+    text = text.replace('$', '\\$')
+    text = text.replace('%', '\\%')
+    text = text.replace('~', '\\~{}')
+    text = text.replace('BACKSLASHPLACEHOLDER', '\\textbackslash{}')
+    return text
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -34,9 +50,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {fix_chars(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {fix_chars(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {fix_chars(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {fix_chars(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

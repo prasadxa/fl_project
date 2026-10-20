@@ -23,6 +23,27 @@ def build_latex_report(req: ReportRequest) -> bytes:
         
         probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
+        def escape_latex(s: str) -> str:
+            if not s:
+                return ""
+            s = s.replace('\\', 'BACKSLASHPLACEHOLDER')
+            s = s.replace('&', r'\&')
+            s = s.replace('%', r'\%')
+            s = s.replace('$', r'\$')
+            s = s.replace('#', r'\#')
+            s = s.replace('_', r'\_')
+            s = s.replace('{', r'\{')
+            s = s.replace('}', r'\}')
+            s = s.replace('~', r'\textasciitilde{}')
+            s = s.replace('^', r'\textasciicircum{}')
+            s = s.replace('BACKSLASHPLACEHOLDER', r'\textbackslash{}')
+            return s
+
+        p_name = escape_latex(req.patient.patient_name)
+        p_id = escape_latex(req.patient.patient_id)
+        p_dob = escape_latex(req.patient.date_of_birth)
+        p_gender = escape_latex(req.patient.gender)
+
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
 \\usepackage{{graphicx}}
@@ -34,9 +55,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {p_name} \\\\
+\\textbf{{Patient ID:}} {p_id} \\\\
+\\textbf{{DOB:}} {p_dob} \\quad \\textbf{{Gender:}} {p_gender}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

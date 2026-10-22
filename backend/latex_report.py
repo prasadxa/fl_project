@@ -5,6 +5,19 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def escape_latex(s: str) -> str:
+    if not s:
+        return ""
+    s = str(s)
+    s = s.replace("\\", "BACKSLASHPLACEHOLDER")
+    s = s.replace("{", "\\{").replace("}", "\\}")
+    s = s.replace("_", "\\_").replace("^", "\\^")
+    s = s.replace("#", "\\#").replace("&", "\\&")
+    s = s.replace("$", "\\$").replace("%", "\\%")
+    s = s.replace("~", "\\textasciitilde{}")
+    s = s.replace("BACKSLASHPLACEHOLDER", "\\textbackslash{}")
+    return s
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -23,6 +36,11 @@ def build_latex_report(req: ReportRequest) -> bytes:
         
         probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
+        patient_name_esc = escape_latex(req.patient.patient_name)
+        patient_id_esc = escape_latex(req.patient.patient_id)
+        dob_esc = escape_latex(req.patient.date_of_birth)
+        gender_esc = escape_latex(req.patient.gender)
+
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
 \\usepackage{{graphicx}}
@@ -34,9 +52,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {patient_name_esc} \\\\
+\\textbf{{Patient ID:}} {patient_id_esc} \\\\
+\\textbf{{DOB:}} {dob_esc} \\quad \\textbf{{Gender:}} {gender_esc}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

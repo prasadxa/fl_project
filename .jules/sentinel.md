@@ -1,4 +1,4 @@
-## 2024-03-22 - [FastAPI Path Parameter URL-Decoding Bug]
-**Vulnerability:** Path traversal in a catch-all route that serves static files using FastAPI path parameters.
-**Learning:** FastAPI's '{path:path}' definition decodes URL-encoded payloads like '%2e%2e%2f' after Starlette's initial sanitization, bypassing standard sanitizations and directly feeding dangerous input to 'pathlib.Path'.
-**Prevention:** Always verify paths mathematically using 'candidate.resolve().relative_to(base_dir.resolve())' instead of trusting the input when generating file paths.
+## 2023-10-22 - Missing LaTeX Injection Escaping
+**Issue:** The `backend/latex_report.py` file dynamically generated a diagnostic PDF report by directly interpolating untrusted user inputs (such as patient names and IDs) into a LaTeX string template without any escaping, passing it directly to `pdflatex`.
+**Learning:** Python f-strings or `.format()` calls inside `.tex` file generation act identically to unparameterized SQL queries, exposing the application to server-side LaTeX Injection. This can lead to arbitrary file reads (e.g., `\input{/etc/passwd}`) or even remote code execution if `shell-escape` is enabled.
+**Prevention:** Always implement a robust character escaping function (specifically targeting `\`, `{`, `}`, `_`, `^`, `#`, `&`, `$`, `%`, `~`) and apply it unconditionally to all user-controlled data before embedding it into LaTeX source code, mirroring the principle of parameterized queries.

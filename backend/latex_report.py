@@ -2,8 +2,19 @@ import subprocess
 import tempfile
 import shutil
 import cv2
+import re
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
+
+def escape_latex(s: str) -> str:
+    if not isinstance(s, str):
+        return str(s)
+    s = s.replace('\\', 'BACKSLASHPLACEHOLDER')
+    s = re.sub(r'([{}&$#_%])', r'\\\1', s)
+    s = s.replace('^', r'\textasciicircum{}')
+    s = s.replace('~', r'\textasciitilde{}')
+    s = s.replace('BACKSLASHPLACEHOLDER', r'\textbackslash{}')
+    return s
 
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
@@ -34,9 +45,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {escape_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {escape_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {escape_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {escape_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

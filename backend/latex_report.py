@@ -5,6 +5,26 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def _sanitize_latex(text: str) -> str:
+    if not isinstance(text, str):
+        return str(text)
+    text = text.replace('\\', 'BACKSLASHPLACEHOLDER')
+    replacements = {
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\textasciicircum{}',
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    text = text.replace('BACKSLASHPLACEHOLDER', r'\textbackslash{}')
+    return text
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -34,9 +54,9 @@ def build_latex_report(req: ReportRequest) -> bytes:
     \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {_sanitize_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {_sanitize_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {_sanitize_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {_sanitize_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}

@@ -5,6 +5,18 @@ import cv2
 from pathlib import Path
 from report_generator import ReportRequest, SHORT_NAMES, RISK_LEVEL
 
+def sanitize_latex(text: str) -> str:
+    if not text:
+        return ""
+    text = str(text).replace("\\", "BACKSLASHPLACEHOLDER")
+    special_chars = {
+        "&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
+        "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
+    }
+    for char, replacement in special_chars.items():
+        text = text.replace(char, replacement)
+    return text.replace("BACKSLASHPLACEHOLDER", r"\textbackslash{}")
+
 def build_latex_report(req: ReportRequest) -> bytes:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d)
@@ -18,10 +30,10 @@ def build_latex_report(req: ReportRequest) -> bytes:
             cv2.imwrite(str(p / "cam.jpg"), cv2.cvtColor(req.gradcam_image, cv2.COLOR_RGB2BGR))
             cam_img = r"\includegraphics[width=0.45\textwidth]{cam.jpg}"
             
-        sn = SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key)
-        risk = RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN")
+        sn = sanitize_latex(SHORT_NAMES.get(req.ai_pred_key, req.ai_pred_key))
+        risk = sanitize_latex(RISK_LEVEL.get(req.ai_pred_key, "UNKNOWN"))
         
-        probs = "\n".join([f"\\item \\textbf{{{SHORT_NAMES.get(k, k)}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
+        probs = "\n".join([f"\\item \\textbf{{{sanitize_latex(SHORT_NAMES.get(k, k))}}}: {v*100:.1f}\\%" for k, v in req.probabilities.items()])
         
         tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[margin=1in]{{geometry}}
@@ -31,12 +43,12 @@ def build_latex_report(req: ReportRequest) -> bytes:
 \\begin{{document}}
 \\begin{{center}}
     {{\\LARGE \\textbf{{TECNOMATE CLINICAL AI - DIAGNOSTIC REPORT}}}} \\\\[0.5cm]
-    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {req.session_id[:16]}
+    \\textbf{{Date:}} {req.server_timestamp} \\quad \\textbf{{Session:}} {sanitize_latex(req.session_id[:16])}
 \\end{{center}}
 \\hrule \\vspace{{0.5cm}}
-\\textbf{{Patient Name:}} {req.patient.patient_name} \\\\
-\\textbf{{Patient ID:}} {req.patient.patient_id} \\\\
-\\textbf{{DOB:}} {req.patient.date_of_birth} \\quad \\textbf{{Gender:}} {req.patient.gender}
+\\textbf{{Patient Name:}} {sanitize_latex(req.patient.patient_name)} \\\\
+\\textbf{{Patient ID:}} {sanitize_latex(req.patient.patient_id)} \\\\
+\\textbf{{DOB:}} {sanitize_latex(req.patient.date_of_birth)} \\quad \\textbf{{Gender:}} {sanitize_latex(req.patient.gender)}
 \\vspace{{0.5cm}} \\hrule \\vspace{{0.5cm}}
 \\begin{{center}}
 {scan_img} \\quad {cam_img}
